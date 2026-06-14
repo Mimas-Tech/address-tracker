@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Address Tracker — Setup</title>
+  <link rel="stylesheet" href="onboarding.css">
+</head>
+<body>
+  <main class="card">
+    <h1>🏠 Address Tracker</h1>
+
+    <!-- Step 1: situation -->
+    <section id="step1">
+      <p class="lead">
+        Address Tracker quietly notes every site where your address shows up, so
+        when you move you already have the checklist of places to update.
+      </p>
+      <p class="note">
+        Everything stays on this device — no servers, no sign-in. You can export a
+        backup any time from Settings.
+      </p>
+      <p class="ask">Where are you right now?</p>
+      <div class="choices">
+        <button class="choice" data-situation="not_moving">
+          <strong>Not moving yet</strong>
+          <span>Just start building the list as I browse.</span>
+        </button>
+        <button class="choice" data-situation="about_to_move">
+          <strong>About to move</strong>
+          <span>I know my new address and want to track the switch.</span>
+        </button>
+        <button class="choice" data-situation="already_moved">
+          <strong>Already moved</strong>
+          <span>I need to chase down everywhere with my old address.</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Step 2: address(es) -->
+    <section id="step2" hidden>
+      <div id="address-forms"></div>
+      <p id="form-error" class="error" hidden></p>
+      <div class="actions">
+        <button id="back" class="secondary">← Back</button>
+        <button id="continue" class="primary">Continue</button>
+      </div>
+    </section>
+
+    <!-- Done -->
+    <section id="done" hidden>
+      <p class="lead">✅ You're all set.</p>
+      <p id="done-detail" class="note"></p>
+      <div class="actions">
+        <button id="open-dashboard" class="primary">Open dashboard</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="../shared/constants.js"></script>
+  <script src="../shared/detect.js"></script>
+  <script src="../shared/address.js"></script>
+  <script src="../shared/storage.js"></script>
+  <script src="onboarding.js"></script>
+</body>
+</html>

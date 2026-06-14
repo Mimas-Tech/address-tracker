@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Address Tracker</title>
+  <link rel="stylesheet" href="management.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">🏠 Address Tracker</div>
+    <nav class="tabs">
+      <button data-action="tab" data-tab="dashboard" class="tab">Dashboard</button>
+      <button data-action="tab" data-tab="sites" class="tab">Sites</button>
+      <button data-action="tab" data-tab="addresses" class="tab">Addresses</button>
+      <button data-action="tab" data-tab="settings" class="tab">Settings</button>
+    </nav>
+  </header>
+
+  <main id="view"></main>
+
+  <!-- Reused for Start Move and Edit Address -->
+  <dialog id="addr-dialog">
+    <form method="dialog">
+      <h3 id="addr-dialog-title">New address</h3>
+      <label>Street address<input data-f="street" autocomplete="off"></label>
+      <label>Suburb<input data-f="suburb" autocomplete="off"></label>
+      <div class="row">
+        <label>State<select data-f="state"></select></label>
+        <label>Postcode<input data-f="postcode" maxlength="4" inputmode="numeric"></label>
+      </div>
+      <p class="error" id="addr-dialog-error" hidden></p>
+      <menu>
+        <button value="cancel" class="secondary">Cancel</button>
+        <button id="addr-dialog-save" value="save" class="primary">Save</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <script src="../shared/constants.js"></script>
+  <script src="../shared/detect.js"></script>
+  <script src="../shared/address.js"></script>
+  <script src="../shared/storage.js"></script>
+  <script src="management.js"></script>
+</body>
+</html>

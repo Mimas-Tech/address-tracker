@@ -1,0 +1,6 @@
+/* content.css — the banner renders inside a Shadow DOM, so its visuals are
+   self-contained there. This only hardens the host element against page styles
+   that use broad selectors (e.g. `div { ... }`). */
+#__address_tracker_banner__ {
+  all: initial;
+}

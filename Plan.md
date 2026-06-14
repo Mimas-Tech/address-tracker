@@ -15,10 +15,10 @@ live at your current address, and it keeps a private ledger of every site where
 it sees that address. The day you move, the checklist already exists.
 
 **Design constraints (non-negotiable for v1):**
-- **Completely closed** — zero API calls, no third-party servers, no backend we
-  run. Data lives in Chrome's own storage; the only thing that leaves the device
-  is via **Chrome's built-in sync** (your own Google account), and only for the
-  small, carefully-chosen data described under Storage below.
+- **Completely closed** — zero API calls, no third-party servers, no backend. All
+  data lives in `chrome.storage.local` on your device and never leaves it.
+  Cross-device transfer and backup are by **manual JSON export/import** — one
+  simple, standard mechanism, with no automatic cloud sync to reason about.
 - **Simple** — detect and track. No autofill, no address autocomplete, no ML.
 - **Australia-only** — the matcher uses AU-specific rules (states, postcodes,
   street abbreviations).
@@ -34,9 +34,8 @@ ledger in the background as you browse normally.
 
 ### Phase 2 — Move
 You enter your new address (typed into structured fields). The old address
-becomes "previous"; the new one becomes "current." Every tracked page that holds
-your old address (everything previously `up_to_date`) flips to **needs update** —
-that's your checklist.
+becomes "previous"; the new one becomes "current." Every tracked page where the
+old address was detected flips to **needs update** — that's your checklist.
 
 ### Phase 3 — Update & track
 As you revisit those sites:
@@ -44,15 +43,16 @@ As you revisit those sites:
 - When the **new** address appears, or you tick it off → the site flips to **done**.
 - A progress view shows "8 of 20 done."
 
-All detection runs on-device; nothing is sent to any third-party server (only
-Chrome's own sync moves the small `sync` bucket between your devices).
+All detection runs on-device; nothing is ever sent off your machine.
 
 ---
 
 ## The One Honest Limitation
 
-It can only log sites **you visit while it's installed**. It can't find a site
-you never open. Mitigations, all local:
+It can only log sites **you visit while it's installed** — and only where the
+address is actually **rendered** on the page (not hidden behind an unopened "edit
+profile" section or a lazy-loaded tab). It can't find a site you never open.
+Mitigations:
 - The earlier you install it, the more complete your ledger is by moving day —
   onboarding says this clearly.
 - A **"+ Add site manually"** button for places you remember but haven't visited.
@@ -69,7 +69,9 @@ matching tractable.
 **Normalization** (applied to both the stored address and page text):
 - lowercase, collapse whitespace, strip punctuation
 - expand street-type abbreviations: `st`↔`street`, `rd`↔`road`, `ave`/`av`↔`avenue`,
-  `ct`↔`court`, `pl`↔`place`, etc.
+  `ct`↔`court`, `pl`↔`place`, etc. — **position-aware**: a *leading* `St ` means
+  *Saint* (St Kilda Rd, St Georges Tce), a *trailing* `St` means *Street*; also
+  normalize the dotted `St.` form.
 - canonicalize state: `sa`↔`south australia`, `nsw`↔`new south wales`, …
 - handle unit/level prefixes: `3/12`, `unit 3, 12`, `level 2`
 
@@ -79,7 +81,8 @@ The extension recognizes the address in three complementary ways:
 auto-generate as many written forms as possible up front — abbreviated/expanded
 street type (`St`/`Street`), state code vs full name (`SA`/`South Australia`),
 with/without commas — and match these (normalized) against the page text. Covers
-most sites on day one with no user effort.
+most sites on day one with no user effort. These forms are generated in memory on
+load (not stored); only user-flagged variants are persisted.
 
 **2. Component matching (catches split forms & odd layouts).** We also read the
 values of address-y form fields individually (street, suburb, state, postcode in
@@ -109,14 +112,18 @@ still anchors. Residual noise (your suburb on a news page, a store locator) is
 expected and the user drops it with Ignore — still far better than remembering
 every site unaided.
 
+**Out of scope for v1:** PO Box / postal addresses (e.g. `PO Box 123, Adelaide SA
+5001`) have no street name, so the street-anchored matcher won't detect them — add
+those sites as **manual entries**. (Postal-address matching is a v2 item.)
+
 **Statuses:** an entry is `needs_update` · `up_to_date` · `done`. We track and help
 the user update the **detected**, **flagged**, and **manually-added** entries.
 
 **Ignoring = dropping, not a status.** When the user ignores an entry it leaves the
 checklist entirely — not listed, not counted in progress, not monitored (no
-re-scan, no banner). We keep only a minimal set of ignored keys so the entry isn't
-silently re-added on the next visit; ignored entries can be reviewed and restored
-from a small collapsed list in Settings. **Ignore is user-only in v1** — the
+re-scan, no banner). We keep the entry with an `ignored` flag so it isn't silently
+re-added on the next visit; ignored entries can be reviewed and restored from a
+small collapsed list in Settings. **Ignore is user-only in v1** — the
 extension never auto-ignores, because silently hiding a page works against the core
 mission of "don't miss anywhere."
 
@@ -132,17 +139,24 @@ one, demoted to past) and `to` = the new address (promoted to current). Outside 
 move, detection hunts only the **current** address (ledger building). During a
 move, it hunts **both** the old (`from`) and the new (`to`) address on every page.
 
-**How detection is recorded.** Each ledger entry keeps **`everDetected`** (every
+**How detection is recorded.** Each page entry keeps **`everDetected`** (every
 address id ever matched on that page) and **`lastDetected`** (ids matched on the
 most recent scan). Status is *derived* from these plus the active move — we store
-no status on detected pages, so nothing goes stale and the move-start "flip" needs
-no bulk write.
+no derived status on detected pages, so nothing goes stale and the move-start
+"flip" needs no bulk write.
 
 **Move scope (which entries count).** With an active move (`from` = old id,
 `to` = new id), an entry is *part of the move* iff `from ∈ everDetected` (the old
-address was ever seen there) or it's a manual entry created for this move. Pages
-that only ever showed the new address are **not** part of the move — they stay
-`up_to_date` and never inflate progress.
+address was ever seen there) **or** it's a manually-added entry (web site or task)
+created during this move. A manual web entry added during a move defaults to
+`needs_update` and is in scope; one added with no move active is just a tracked
+site (`up_to_date`). Manual *tasks* (no URL) are move to-dos and are only offered
+while a move is active. Pages that only ever showed the new address are **not**
+part of the move — they stay `up_to_date` and never inflate progress.
+
+*Accepted trade-off:* a move hunts only the **immediate previous** address, so a
+page left on an even-older address from an unfinished earlier move won't resurface
+in a later move — the user can re-add it manually if needed.
 
 **Derived status for in-scope entries** (recomputed each scan):
 - `from ∈ lastDetected` (old address on the page now) → `needs_update`.
@@ -167,8 +181,9 @@ stale `statusOverride`s left from a prior move.
 
 **Move complete.** `move.status = completed`; new stays current, old stays past.
 Clear all `statusOverride`s (entries derive back to `up_to_date`). **Manual tasks
-(no URL) created for the move are archived/removed** — they're one-time to-dos.
-Manually-added *web* entries persist as known sites. Notes and `ignoredKeys` persist.
+(no URL) created for the move are removed** — they're one-time to-dos (v1 keeps no
+move history; that's v2). Manually-added *web* entries persist as known sites. Notes
+and ignored flags persist.
 
 **Move cancel.** The address swap reverts (old back to current) and **the new
 address record created for the move is deleted**. Clear `statusOverride`s;
@@ -185,8 +200,8 @@ not `0 / 0`.
 
 ### 1. Onboarding (auto-opens on install)
 - **Step 1 — Welcome + situation.** Brief explanation; note there are no
-  third-party servers (data stays in Chrome, optionally syncs via your Google
-  account). Then ask: *Are you…* **Not moving yet** · **About to move** ·
+  third-party servers — data stays on your device and you can export a backup
+  anytime. Then ask: *Are you…* **Not moving yet** · **About to move** ·
   **Already moved**.
 - **Step 2 — Address(es)** via structured fields (street, suburb, state, postcode;
   country fixed to Australia):
@@ -216,6 +231,8 @@ not `0 / 0`.
 └───────────────────────────────────┘
 ```
 No move in progress → hide the move section, show **Start Move** prominently.
+(Progress `X / Y` counts only in-scope entries — `done / (needs_update + done)`;
+"sites tracked" is the whole ledger and is a separate number.)
 
 ### 3. Management Page (full tab)
 Tabs: **Dashboard · Sites · Addresses · Settings**
@@ -252,11 +269,12 @@ can **add** a variant manually, and **edit or delete** any variant — including
 wrong ones that got flagged by mistake.
 
 **Settings** —
-- Data: **Export as JSON** / **Import** — full backup/transfer of both sync and
-  local data (sync already follows your Chrome account; export is the portable copy).
+- Data: **Export as JSON** / **Import** — the backup and cross-device transfer
+  mechanism (everything is local; the export is your only copy).
 - Detection toggles: scan visible text, scan pre-filled form values, skip
   footer/header, re-scan on DOM change (SPA support).
 - Notifications: show banner when old address found.
+- **Ignored sites:** a collapsed list to review and restore anything you've ignored.
 
 ### 4. Move Progress View (within management page)
 Two columns — **Needs Update** and **Done** — with a progress bar and
@@ -271,51 +289,43 @@ Only appears during an active move when the old address is found:
 ┌──────────────────────────────────────────────────────────┐
 │ 🏠 Address Tracker · Old address found on this page      │
 │ 12 Smith St, Adelaide SA 5000                            │
-│            [Mark as Done]  [Not my address]  [✕]         │
+│   [Copy new address]  [Mark as Done]  [Not mine]  [✕]    │
 └──────────────────────────────────────────────────────────┘
 ```
-Injected inside a **Shadow DOM** so page styles/CSP don't collide. **[Not my
-address]** drops the page (adds it to `ignoredKeys`) so it won't return; **[✕]**
-only dismisses for the current session and the page stays in the list. A **Copy
-address** action provides the new address components for manual pasting (the only
-"fill" help in v1).
+Injected inside a **Shadow DOM** so page styles/CSP don't collide. **[Not mine]**
+marks the page `ignored` so it won't return; **[✕]** only dismisses for the current
+session and the page stays in the list. **[Copy new address]** copies the new
+address (components available too) for manual pasting — the only "fill" help in v1.
 
 ---
 
-## Storage — sync vs local
+## Storage
 
-Guiding rule: **anything the code can repopulate stays in `local`; anything the
-user crafted (and couldn't easily recreate) goes to `sync`.** Sync is small
-(~100 KB), so we save to it carefully.
+Everything lives in **`chrome.storage.local`** (~10 MB, no per-item size fights) —
+one flat store, the simplest thing that works. We still **keep stored data minimal**,
+saving only what can't be trivially recomputed:
 
-**`chrome.storage.sync`** (precious, survives reinstall, follows the user across
-devices):
-- `addresses` — including their variants (generated *and* user-flagged)
-- `moves` — the move records
-- `settings`
-- `decisions` — the user's per-entry choices (manual status overrides, notes,
-  manual additions), keyed by normalized URL (manual tasks get a generated key).
-  This is the irreplaceable human input layered on top of the ledger.
-- `ignoredKeys` — the minimal drop-list (see Ignoring).
+- **Generated address variants are not stored** — they're regenerated from the
+  structured fields on load. Only **user-flagged** variants are persisted (the
+  irreplaceable bit).
+- Detection stores only match *outcomes* (which address ids matched), never raw page
+  text or form values.
 
-**`chrome.storage.local`** (regenerated by browsing, fine to lose):
-- `ledger` — the auto-detected pages: domain, url, title, detected addresses,
-  timestamps. If wiped, it rebuilds as the user browses, and `decisions` re-apply
-  by matching normalized URL.
+**No automatic cloud sync in v1.** Cross-device transfer and backup are by **JSON
+export/import** — one obvious mechanism the user controls. (Reinstalling or clearing
+storage without an export loses the data; the page ledger then rebuilds as you browse.)
 
-The UI renders the checklist as the **union** of `ledger` entries and `decisions`
-entries (a manual task or a not-yet-visited manual site lives only in `decisions`),
-joined on the normalized URL where both exist, **minus** anything in `ignoredKeys`.
-Effective status = `statusOverride` if set, otherwise derived from detection (see
-Status Lifecycle). Full **export/import as JSON** covers everything (sync + local)
-for backup and machine-to-machine transfer.
+The checklist is a single `pages` map keyed by normalized URL (manual tasks get a
+generated key). Effective status = the override if set, **except** that a positively
+re-detected old address always forces `needs_update` (see Status Lifecycle). Ignored
+entries are excluded from every list and count.
 
 ## Data Model
 
 ```js
+// all in chrome.storage.local
 schemaVersion: 1,
 
-// --- sync ---
 addresses: [
   {
     id: string,
@@ -324,7 +334,7 @@ addresses: [
     state: string,          // "SA"
     postcode: string,       // "5000"
     country: 'Australia',
-    variants: string[],     // normalized known forms (generated + user-flagged)
+    flaggedVariants: string[],    // ONLY user-flagged forms; common forms generated at runtime
     status: 'current' | 'past',   // invariant: exactly one address is 'current'
     createdAt: number
   }
@@ -341,21 +351,27 @@ moves: [
   }
 ],
 
-decisions: {                // keyed by normalized URL (or a generated key for manual tasks)
+pages: {                    // keyed by normalized URL (manual tasks get a generated key)
   [key: string]: {
     kind: 'web' | 'manual',       // 'manual' = off-web task (phone call, in person, mail)
-    label: string,                // shown for manual tasks (e.g. "Call electricity provider")
-    url: string | null,           // for manual web entries not yet in the ledger
-    moveId: string | null,        // set for manual tasks → archived when that move completes
-    statusOverride: 'needs_update' | 'up_to_date' | 'done' | null,
+    domain: string,               // web entries; manual tasks may omit
+    url: string | null,           // canonical (normalized) URL; null for manual tasks
+    rawUrl: string | null,        // first-seen full URL, for the [Go] link
+    title: string,
+    label: string,                // for manual tasks (e.g. "Call electricity provider")
+    everDetected: string[],       // every address id ever matched here
+    lastDetected: string[],       // address ids matched on the most recent scan
+    statusOverride: 'needs_update' | 'done' | null,   // user's explicit choice
     note: string,
     addedManually: boolean,
+    moveId: string | null,        // set on ANY entry added during a move (scope = moveId===active);
+                                  //   kind:'manual' tasks are removed on complete, kind:'web' persist
+    ignored: boolean,             // dropped from all lists/counts; kept so it isn't re-added
+    firstDetected: number,
+    lastVisited: number,
     statusChangedAt: number
   }
 },
-
-ignoredKeys: string[],      // normalized URLs (or domains) that are dropped: not listed,
-                            // not counted, not monitored — kept only to prevent re-adding
 
 settings: {
   scanVisibleText: boolean,    // default true
@@ -363,20 +379,6 @@ settings: {
   skipFooterHeader: boolean,   // default true
   rescanOnDomMutation: boolean,// default true
   showBanner: boolean          // default true
-},
-
-// --- local ---
-ledger: {                   // keyed by normalized URL
-  [normUrl: string]: {
-    domain: string,         // "ato.gov.au"
-    url: string,            // canonical (normalized) URL
-    rawUrl: string,         // first-seen full URL, for the [Go] link
-    title: string,
-    everDetected: string[], // every address id ever matched on this page
-    lastDetected: string[], // address ids matched on the most recent scan
-    firstDetected: number,
-    lastVisited: number
-  }
 }
 ```
 
@@ -394,7 +396,7 @@ address-tracker/
 ├── onboarding/   onboarding.html · onboarding.js · onboarding.css
 ├── management/   management.html · management.js · management.css
 ├── shared/
-│   ├── storage.js            # read/write helpers; routes sync vs local, URL normalization
+│   ├── storage.js            # read/write helpers over chrome.storage.local + URL normalization
 │   ├── address.js            # structured-field handling + variant generation
 │   ├── detect.js             # normalization + matching (AU rules)
 │   └── constants.js          # state map, street-type abbreviations, postcode regex
@@ -429,28 +431,24 @@ address-tracker/
   fragment, drop the trailing slash, and remove **only a known denylist** of volatile
   params (`utm_*`, `fbclid`, `gclid`, session ids) while keeping the rest —
   over-stripping merges genuinely different pages (`?account=1` vs `?account=2`),
-  under-stripping creates duplicates. This normalized URL joins `ledger` (local) and
-  `decisions` (sync).
-- **Storage split:** `sync` for addresses/variants, moves, settings, and user
-  `decisions` (mind the ~100 KB / ~8 KB-per-item quota — keep items small);
-  `local` for the regenerable `ledger`. Watch sync write-rate limits — debounce
-  writes rather than saving on every keystroke/scan.
-- **Privacy:** we make no network calls; the only data egress is Chrome's own sync
-  of the small `sync` bucket. Form-value scanning is local and toggleable; document
-  it clearly given it can read sensitive inputs. Synced data includes your home
-  address and the list of sites you have accounts on (in `decisions`) — it lives in
-  your Google account. The **export JSON is equally sensitive** (address + full
-  account-site list); warn the user before download/share.
+  under-stripping creates duplicates. This normalized URL is the key into the
+  `pages` map.
+- **Single local store:** everything in `chrome.storage.local` — no sync, no
+  per-item 8 KB quota to design around. Debounce writes (don't save on every
+  keystroke or scan) and write whole records, not field-by-field.
+- **Privacy:** we make no network calls and nothing leaves the device. Form-value
+  scanning is local and toggleable; document it clearly given it can read sensitive
+  inputs. The **export JSON is sensitive** — it contains your home address and the
+  list of sites you have accounts on; warn the user before download/share.
 - **Never persist scanned content:** detection stores only the *match outcome*
-  (which `addressId` matched) — never the raw page text or form-field values. No
-  sensitive input is ever written to storage.
-- **Batch writes:** move-start flips and "Mark All Done" change many entries at
-  once — write the whole `decisions` object in a *single* `sync.set`, never one
-  write per entry, to stay under the ~120 writes/min sync limit.
-- **Clean up on address delete:** when an address is removed/edited, sweep
-  `ledger[*].detectedAddressIds` to drop dangling references.
-- **Multi-device:** sync resolves per key with last-write-wins; acceptable here
-  since edits are rare and human-paced. No custom merge needed.
+  (which `addressId` matched) — never the raw page text or form-field values.
+- **Bulk updates:** "Mark All Done" and move transitions touch many entries — apply
+  them in a single `local.set` of the affected `pages`, not one write each.
+- **Clean up on address delete:** when an address is removed, sweep
+  `pages[*].everDetected` and `pages[*].lastDetected` to drop dangling ids.
+- **Uninstall/clear:** local data is gone on uninstall or a storage clear — the
+  export is the only backup. The page ledger rebuilds by browsing; addresses and
+  notes do not.
 - **Import semantics:** import **merges by id/key** — entries in the file overwrite
   matching local entries, others are added; a "Replace all" option wipes first.
   Reject/upgrade files whose `schemaVersion` doesn't match.
@@ -462,8 +460,8 @@ address-tracker/
 ### Address Management
 - [ ] Enter current address via structured fields (AU)
 - [ ] Add/edit past addresses
-- [ ] Auto-generate variants from components
-- [ ] View, add, edit, and delete variants per address (remove wrong ones)
+- [ ] Generate variants at runtime; persist only user-flagged variants
+- [ ] View, add, edit, and delete flagged variants per address (remove wrong ones)
 
 ### Detection (content script, local)
 - [ ] Match current address always; match the move's old (`from`) address during a move
@@ -488,7 +486,7 @@ address-tracker/
 ### Move Flow
 - [ ] Start Move: new address entered, old→past, new→current
 - [ ] Onboarding "about to move / already moved" starts a move immediately
-- [ ] All "up to date" pages flip to needs_update
+- [ ] Move scope is derived (no bulk flip): pages holding the old address become needs_update
 - [ ] On-page banner during a move when old address found
 - [ ] User can flag an address shown on a page → saved as a new variant
 - [ ] Mark page done manually or when new address detected
@@ -504,10 +502,9 @@ address-tracker/
 - [ ] Copy-address helper on the banner
 
 ### Data
-- [ ] Sync bucket (addresses/variants, moves, settings, decisions) via chrome.storage.sync
-- [ ] Local bucket (regenerable ledger) via chrome.storage.local
-- [ ] Merge ledger + decisions on normalized URL to render the checklist
-- [ ] Export / import all data as JSON (full backup & machine transfer)
+- [ ] Single flat store in chrome.storage.local (no auto-sync)
+- [ ] One `pages` map keyed by normalized URL (detected + manual + overrides + ignored flag)
+- [ ] Export / import all data as JSON (the only backup & cross-device transfer)
 - [ ] Toggleable detection/notification settings
 - [ ] `schemaVersion` for future migrations
 
@@ -517,4 +514,6 @@ address-tracker/
 - Autofill into form fields (fragile with React/Vue/custom pickers)
 - Address autocomplete (would require an API)
 - Multi-country matching
+- PO Box / postal-address matching
+- Hunting all past addresses during a move (not just the immediate previous)
 - Move history with summaries
