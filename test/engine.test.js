@@ -21,7 +21,9 @@ const ctx = (text, fields = []) => ({
 });
 
 const SMITH = { id: 'a1', street: '12 Smith St', suburb: 'Adelaide', state: 'SA', postcode: '5000', flaggedVariants: [] };
+const SMITH_UNIT = { id: 'a4', line2: 'Unit 3', street: '12 Smith St', suburb: 'Adelaide', state: 'SA', postcode: '5000', flaggedVariants: [] };
 const profile = address.buildProfile(SMITH);
+const unitProfile = address.buildProfile(SMITH_UNIT);
 
 console.log('\nMatching');
 ok('full address in free text', detect.matchAddress(profile, ctx('Ship to 12 Smith Street, Adelaide SA 5000.')).matched);
@@ -31,6 +33,13 @@ ok('unit change still anchors', detect.matchAddress(profile, ctx('Unit 3, 12 Smi
 ok('street + suburb, no postcode', detect.matchAddress(profile, ctx('Smith Street Adelaide branch, 12 in stock')).matched);
 
 ok('lone postcode, no street -> no match', !detect.matchAddress(profile, ctx('Win 5000 dollars today!')).matched);
+
+// line2 (unit/apt) field
+ok('line2 + street in free text', detect.matchAddress(unitProfile, ctx('Unit 3, 12 Smith Street, Adelaide SA 5000')).matched);
+ok('street only still matches when line2 set', detect.matchAddress(unitProfile, ctx('12 Smith St Adelaide SA 5000')).matched);
+ok('line2 in separate form field', detect.matchAddress(unitProfile, ctx('Account details', ['Unit 3', '12 Smith St', 'Adelaide', 'SA', '5000'])).matched);
+ok('format includes line2', address.format(SMITH_UNIT) === 'Unit 3, 12 Smith St, Adelaide SA 5000');
+ok('format without line2 unchanged', address.format(SMITH) === '12 Smith St, Adelaide SA 5000');
 ok('street name alone is not enough', !detect.matchAddress(profile, ctx('the smith street band plays tonight')).matched);
 ok('postcode far from context is ignored', !detect.matchAddress(profile, ctx('smith street is lovely. unrelated 5000 here.')).matched);
 ok('unrelated page', !detect.matchAddress(profile, ctx('Today in tech news, nothing relevant.')).matched);
@@ -105,5 +114,40 @@ storage.cancelMove(state2, now + 2);
 ok('cancel reverts to old current', storage.currentAddress(state2).street === '12 Smith St');
 ok('cancel deletes the new address', !storage.addressById(state2, newId));
 
-console.log(`\n${passed} passed, ${failed} failed\n`);
-process.exit(failed ? 1 : 0);
+// ---- update() writes only changed keys (the anti-loop guarantee) ----------
+// content.js must never see a `pages`-only scan as an addresses/moves/settings
+// change, or it would re-scan forever. That holds because update() writes just
+// the keys that changed. Verify with a minimal chrome.storage.local mock.
+console.log('\nGranular writes (loop prevention)');
+(function () {
+  const store = {};
+  let lastSet = null;
+  globalThis.chrome = {
+    storage: {
+      local: {
+        async get(keys) { const o = {}; for (const k of keys) if (k in store) o[k] = store[k]; return o; },
+        async set(obj) { lastSet = Object.keys(obj).sort(); Object.assign(store, structuredClone(obj)); },
+      },
+    },
+  };
+  return (async () => {
+    lastSet = null;
+    await storage.update((s) => storage.setInitialAddress(s, SMITH, 1000));
+    ok('first write includes addresses, not pages', lastSet.includes('addresses') && !lastSet.includes('pages'));
+
+    lastSet = null;
+    await storage.update(() => { /* no-op */ });
+    ok('no-op transition writes nothing', lastSet === null);
+
+    lastSet = null;
+    await storage.update((s) => storage.recordScan(s, { url: 'https://x.com/a' }, [], 1000));
+    ok('empty scan on unknown page writes nothing', lastSet === null);
+
+    lastSet = null;
+    await storage.update((s) => storage.recordScan(s, { url: 'https://x.com/a', title: 'A' }, ['zzz'], 1000));
+    ok('scan writes pages only, never addresses', lastSet.includes('pages') && !lastSet.includes('addresses'));
+
+    console.log(`\n${passed} passed, ${failed} failed\n`);
+    process.exit(failed ? 1 : 0);
+  })();
+})();

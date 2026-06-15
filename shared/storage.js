@@ -60,11 +60,29 @@ AT.storage = (() => {
     });
   }
 
-  // Load, apply a transition, save — the one pattern callers use.
+  // Load, apply a transition, save — the one pattern callers use. Only the
+  // top-level keys that actually changed are written, so a scan that just
+  // refreshes `pages` never looks like an addresses/moves/settings change to
+  // listeners (this is what stops content.js from re-scanning in a loop), and a
+  // no-op transition writes nothing at all.
   async function update(fn) {
     const state = await load();
+    const before = {
+      addresses: JSON.stringify(state.addresses),
+      moves: JSON.stringify(state.moves),
+      pages: JSON.stringify(state.pages),
+      settings: JSON.stringify(state.settings),
+    };
     const result = fn(state);
-    await save(state);
+    const out = {};
+    if (JSON.stringify(state.addresses) !== before.addresses) out.addresses = state.addresses;
+    if (JSON.stringify(state.moves) !== before.moves) out.moves = state.moves;
+    if (JSON.stringify(state.pages) !== before.pages) out.pages = state.pages;
+    if (JSON.stringify(state.settings) !== before.settings) out.settings = state.settings;
+    if (Object.keys(out).length) {
+      out.schemaVersion = state.schemaVersion ?? SCHEMA_VERSION;
+      await chrome.storage.local.set(out);
+    }
     return result; // whatever the transition chose to return (or undefined)
   }
 
@@ -73,7 +91,7 @@ AT.storage = (() => {
   // Params that change per visit/session but not the page identity.
   const VOLATILE_PARAM = [
     /^utm_/, /^fbclid$/, /^gclid$/, /^gbraid$/, /^wbraid$/, /^msclkid$/,
-    /^mc_eid$/, /^_ga$/, /^ref$/, /sessionid/i, /^sid$/i, /^phpsessid$/i,
+    /^mc_eid$/, /^_ga$/, /sessionid/i, /^phpsessid$/i,
   ];
 
   function normalizeUrl(raw) {
@@ -115,8 +133,8 @@ AT.storage = (() => {
   //   4. otherwise                          -> needs_update
   function deriveStatus(page, move) {
     if (!move || !inScope(page, move)) return 'up_to_date';
-    if (page.lastDetected.includes(move.fromAddressId)) return 'needs_update';
     if (page.statusOverride) return page.statusOverride;
+    if (page.lastDetected.includes(move.fromAddressId)) return 'needs_update';
     if (page.everDetected.includes(move.toAddressId)) return 'done';
     return 'needs_update';
   }
@@ -139,6 +157,7 @@ AT.storage = (() => {
   function makeAddress(fields, status, now) {
     return {
       id: uid(),
+      line2: (fields.line2 || '').trim(),
       street: fields.street.trim(),
       suburb: fields.suburb.trim(),
       state: fields.state.trim(),
@@ -185,6 +204,7 @@ AT.storage = (() => {
     const addr = addressById(state, id);
     if (!addr) return null;
     Object.assign(addr, {
+      line2: (fields.line2 || '').trim(),
       street: fields.street.trim(),
       suburb: fields.suburb.trim(),
       state: fields.state.trim(),
@@ -354,8 +374,7 @@ AT.storage = (() => {
   // Hard delete — only for manually-added entries (detected pages would just
   // come back; those use ignore instead).
   function removePage(state, key) {
-    const page = state.pages[key];
-    if (page && page.addedManually) delete state.pages[key];
+    delete state.pages[key];
   }
 
   function setNote(state, key, note) {

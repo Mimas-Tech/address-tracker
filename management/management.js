@@ -9,6 +9,9 @@
 
   let state = storage.defaultState();
   let tab = location.hash === '#move' ? 'dashboard' : 'dashboard';
+  let sitesQuery = '';
+
+  const TRASH = `<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0zM14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/></svg>`;
 
   // ---- helpers -------------------------------------------------------------
 
@@ -34,6 +37,84 @@
     await refresh();
   }
 
+  // ---- toast ---------------------------------------------------------------
+
+  function showToast(page, addrs) {
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.innerHTML = `<div class="toast-title">Detected on ${esc(page.domain || page.title || 'a site')}</div>
+      <div class="toast-sub">${esc(addrs.map(a => address.format(a)).join(', '))}</div>`;
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+  }
+
+  // ---- modal (replaces confirm / prompt / alert) ---------------------------
+
+  const modal = $('#modal');
+  let modalResolve = null;
+
+  function openModal({ title = '', message = '', fields = [], okLabel = 'OK', cancelLabel = 'Cancel', danger = false, hideCancel = false }) {
+    const titleEl = $('#modal-title');
+    const msgEl = $('#modal-msg');
+    const fieldsEl = $('#modal-fields');
+    const errEl = $('#modal-error');
+    const okBtn = $('#modal-ok');
+    const cancelBtn = $('#modal-cancel');
+
+    titleEl.textContent = title;
+    titleEl.hidden = !title;
+    msgEl.textContent = message;
+    msgEl.hidden = !message;
+    errEl.hidden = true;
+    okBtn.textContent = okLabel;
+    okBtn.className = `primary${danger ? ' danger' : ''}`;
+    cancelBtn.textContent = cancelLabel;
+    cancelBtn.hidden = hideCancel;
+
+    fieldsEl.innerHTML = '';
+    for (const f of fields) {
+      const label = document.createElement('label');
+      label.textContent = f.label || '';
+      const input = document.createElement('input');
+      input.type = f.type || 'text';
+      input.value = f.default || '';
+      input.placeholder = f.placeholder || '';
+      input.setAttribute('data-field', f.key);
+      if (f.required) input.required = true;
+      input.autocomplete = 'off';
+      label.appendChild(input);
+      fieldsEl.appendChild(label);
+    }
+
+    return new Promise((resolve) => {
+      modalResolve = resolve;
+      modal.showModal();
+      fieldsEl.querySelector('input')?.focus();
+    });
+  }
+
+  $('#modal-ok').addEventListener('click', () => {
+    const form = modal.querySelector('form');
+    if (!form.reportValidity()) return;
+    const values = {};
+    for (const input of modal.querySelectorAll('[data-field]')) {
+      values[input.dataset.field] = input.value.trim();
+    }
+    const resolve = modalResolve; modalResolve = null;
+    modal.close();
+    if (resolve) resolve({ confirmed: true, values });
+  });
+
+  $('#modal-cancel').addEventListener('click', () => {
+    const resolve = modalResolve; modalResolve = null;
+    modal.close();
+    if (resolve) resolve({ confirmed: false, values: {} });
+  });
+
+  modal.addEventListener('close', () => {
+    if (modalResolve) { const r = modalResolve; modalResolve = null; r({ confirmed: false, values: {} }); }
+  });
+
   // ---- address dialog (shared by Start Move / Edit) ------------------------
 
   const dlg = $('#addr-dialog');
@@ -48,7 +129,7 @@
 
   function readDialog() {
     const f = (n) => dlg.querySelector(`[data-f="${n}"]`).value.trim();
-    return { street: f('street'), suburb: f('suburb'), state: f('state'), postcode: f('postcode') };
+    return { line2: f('line2'), street: f('street'), suburb: f('suburb'), state: f('state'), postcode: f('postcode') };
   }
 
   function validateAddress(a) {
@@ -61,6 +142,7 @@
     $('#addr-dialog-title').textContent = title;
     dlg.querySelector('[data-f="state"]').innerHTML = stateOptions(prefill?.state || '');
     dlg.querySelector('[data-f="street"]').value = prefill?.street || '';
+    dlg.querySelector('[data-f="line2"]').value = prefill?.line2 || '';
     dlg.querySelector('[data-f="suburb"]').value = prefill?.suburb || '';
     dlg.querySelector('[data-f="postcode"]').value = prefill?.postcode || '';
     $('#addr-dialog-error').hidden = true;
@@ -130,7 +212,7 @@
         </div>
       </section>
       ${prog.total === 0
-        ? `<section class="card empty">Nothing detected yet — browse your accounts, or add sites/tasks from the Sites tab.</section>`
+        ? `<section class="card empty">Nothing detected yet. Browse your accounts, or add sites and tasks from the Sites tab.</section>`
         : `<div class="columns">
             ${moveColumn('Needs Update', needs, move)}
             ${moveColumn('Done', done, move)}
@@ -163,57 +245,142 @@
   // ---- render: sites -------------------------------------------------------
 
   function pageKey(p) {
-    // Pages are stored keyed by URL/task-id; find this entry's key.
     return Object.keys(state.pages).find((k) => state.pages[k] === p);
+  }
+
+  function buildSiteRows() {
+    const move = storage.activeMove(state);
+    const web = Object.entries(state.pages).filter(([, p]) => !p.ignored && isWeb(p));
+
+    const q = sitesQuery.trim().toLowerCase();
+    const filtered = q
+      ? web.filter(([, p]) =>
+          (p.domain || '').toLowerCase().includes(q) ||
+          (p.title || '').toLowerCase().includes(q) ||
+          (p.rawUrl || '').toLowerCase().includes(q) ||
+          p.everDetected.some((id) => {
+            const a = storage.addressById(state, id);
+            return a && address.format(a).toLowerCase().includes(q);
+          })
+        )
+      : web;
+
+    if (!filtered.length) {
+      const msg = q
+        ? 'No sites match your search.'
+        : 'No sites tracked yet. Browse your accounts, or add one below.';
+      return `<tr><td colspan="5" class="empty-row">${msg}</td></tr>`;
+    }
+
+    return filtered.map(([key, p]) => {
+      const k = esc(key);
+      const status = move ? storage.deriveStatus(p, move) : null;
+      const statusCol = status ? statusBadge(status) : '<span class="muted">—</span>';
+      const statusAct = status
+        ? (status === 'done'
+            ? `<button class="link" data-action="mark-needs" data-key="${k}">Reopen</button>`
+            : `<button class="link" data-action="mark-done" data-key="${k}">Mark done</button>`)
+        : '';
+      const domainEl = p.rawUrl
+        ? `<a class="domain-pill" href="${esc(p.rawUrl)}" target="_blank" title="${esc(p.rawUrl)}">${esc(p.domain)}</a>`
+        : `<span class="domain-pill">${esc(p.domain)}</span>`;
+      const addrs = p.everDetected
+        .map(id => storage.addressById(state, id))
+        .filter(Boolean)
+        .map(a => `<span class="addr-text">${esc(address.format(a))}</span>`)
+        .join('');
+      const noteHtml = p.note ? `<span class="row-note">${esc(p.note)}</span>` : '';
+      return `<tr>
+        <td class="col-domain">${domainEl}</td>
+        <td class="col-page">
+          <span class="page-title">${esc(p.title || p.url || '(untitled)')}</span>
+          ${noteHtml}
+        </td>
+        <td class="col-addr">${addrs || '<span class="muted">—</span>'}</td>
+        <td class="col-status">${statusCol}</td>
+        <td class="col-actions"><div class="actions-row">
+          ${statusAct ? statusAct + '<span class="actions-sep"></span>' : ''}
+          <button class="link" data-action="edit-note" data-key="${k}">Note</button>
+          <span class="actions-sep"></span>
+          <button class="link muted" data-action="ignore" data-key="${k}">Ignore</button>
+          <span class="actions-sep"></span>
+          <button class="link danger" data-action="remove" data-key="${k}">Delete</button>
+        </div></td>
+      </tr>`;
+    }).join('');
   }
 
   function renderSites() {
     const move = storage.activeMove(state);
-    const entries = Object.entries(state.pages).filter(([, p]) => !p.ignored);
-    const web = entries.filter(([, p]) => isWeb(p));
-    const tasks = entries.filter(([, p]) => p.kind === 'manual');
+    const web = Object.entries(state.pages).filter(([, p]) => !p.ignored && isWeb(p));
+    const tasks = Object.entries(state.pages).filter(([, p]) => !p.ignored && p.kind === 'manual');
+    const totalCount = web.length;
 
-    const byDomain = {};
-    for (const [key, p] of web) (byDomain[p.domain] ||= []).push([key, p]);
+    const taskRows = tasks.map(([key, p]) => {
+      const k = esc(key);
+      const status = move ? storage.deriveStatus(p, move) : null;
+      const statusCol = status ? statusBadge(status) : '<span class="muted">—</span>';
+      const statusAct = status
+        ? (status === 'done'
+            ? `<button class="link" data-action="mark-needs" data-key="${k}">Reopen</button>`
+            : `<button class="link" data-action="mark-done" data-key="${k}">Mark done</button>`)
+        : '';
+      const noteHtml = p.note ? `<span class="row-note">${esc(p.note)}</span>` : '';
+      return `<tr>
+        <td colspan="2" class="col-page">
+          <span class="page-title">${esc(p.label || 'Task')}</span>${noteHtml}
+        </td>
+        <td class="col-addr"><span class="muted">Off-web</span></td>
+        <td class="col-status">${statusCol}</td>
+        <td class="col-actions"><div class="actions-row">
+          ${statusAct ? statusAct + '<span class="actions-sep"></span>' : ''}
+          <button class="link" data-action="edit-note" data-key="${k}">Note</button>
+          <span class="actions-sep"></span>
+          <button class="link danger" data-action="remove" data-key="${k}">Delete</button>
+        </div></td>
+      </tr>`;
+    }).join('');
 
-    const domainGroups = Object.keys(byDomain).sort().map((domain) => {
-      const rows = byDomain[domain].map(([key, p]) => siteRow(key, p, move)).join('');
-      return `<details class="group"><summary>${esc(domain)} <span class="muted">(${byDomain[domain].length})</span></summary>${rows}</details>`;
-    }).join('') || `<p class="muted">No sites tracked yet. Browse your accounts, or add one below.</p>`;
-
-    const taskGroup = tasks.length
-      ? `<details class="group" open><summary>Off-web tasks <span class="muted">(${tasks.length})</span></summary>
-         ${tasks.map(([key, p]) => siteRow(key, p, move)).join('')}</details>` : '';
+    const taskSection = tasks.length ? `
+      <section class="card sites-card">
+        <div class="block-title" style="padding:14px 16px 0">Off-web tasks (${tasks.length})</div>
+        <div class="table-wrap">
+          <table class="sites-table">
+            <thead><tr>
+              <th colspan="2">Task</th><th>Type</th><th>Status</th>
+              <th class="col-actions-head">Actions</th>
+            </tr></thead>
+            <tbody>${taskRows}</tbody>
+          </table>
+        </div>
+      </section>` : '';
 
     view.innerHTML = `
-      <section class="card">
-        <div class="toolbar">
-          <button class="secondary" data-action="add-site">+ Add site</button>
-          <button class="secondary" data-action="add-task"${move ? '' : ' disabled title="Start a move first"'}>+ Add task</button>
+      <section class="card sites-card">
+        <div class="sites-search-bar">
+          <input type="search" id="sites-search"
+            placeholder="Search domain, title or address…"
+            value="${esc(sitesQuery)}">
+          <span class="sites-stat">${totalCount} site${totalCount === 1 ? '' : 's'}</span>
+          <div class="toolbar-btns">
+            <button class="secondary" data-action="add-site">+ Add site</button>
+            <button class="secondary" data-action="add-task"${move ? '' : ' disabled title="Start a move first"'}>+ Add task</button>
+          </div>
         </div>
-        ${domainGroups}
-        ${taskGroup}
-      </section>`;
-  }
-
-  function siteRow(key, p, move) {
-    const status = storage.deriveStatus(p, move);
-    const k = esc(key);
-    const go = isWeb(p) && p.rawUrl ? `<a class="link" href="${esc(p.rawUrl)}" target="_blank">Go</a>` : '';
-    const statusBtns = status === 'done'
-      ? `<button class="link" data-action="mark-needs" data-key="${k}">Needs update</button>`
-      : `<button class="link" data-action="mark-done" data-key="${k}">Mark done</button>`;
-    const removeOrIgnore = p.addedManually
-      ? `<button class="link danger" data-action="remove" data-key="${k}">Remove</button>`
-      : `<button class="link danger" data-action="ignore" data-key="${k}">Ignore</button>`;
-    const note = p.note ? `<div class="li-note">📝 ${esc(p.note)}</div>` : '';
-    return `<div class="site-row">
-        <div class="li-main">${esc(pageName(p))} ${statusBadge(status)}</div>
-        <div class="li-sub">${go} ${statusBtns}
-          <button class="link" data-action="edit-note" data-key="${k}">Note</button>
-          ${removeOrIgnore}</div>
-        ${note}
-      </div>`;
+        <div class="table-wrap">
+          <table class="sites-table">
+            <thead><tr>
+              <th class="col-domain">Domain</th>
+              <th>Page</th>
+              <th class="col-addr">Address detected</th>
+              <th class="col-status">Status</th>
+              <th class="col-actions-head">Actions</th>
+            </tr></thead>
+            <tbody id="sites-tbody">${buildSiteRows()}</tbody>
+          </table>
+        </div>
+      </section>
+      ${taskSection}`;
   }
 
   // ---- render: addresses ---------------------------------------------------
@@ -243,7 +410,7 @@
         </div>
         <div class="block-title">Known variants</div>
         <p class="muted small">Common abbreviations (St/Street, SA/South Australia) are matched automatically. Add custom forms below.</p>
-        <ul class="variants">${variants}</ul>
+        <ol class="variants">${variants}</ol>
         <button class="link" data-action="add-variant" data-id="${a.id}">+ Add variant</button>
       </section>`;
   }
@@ -263,7 +430,7 @@
     view.innerHTML = `
       <section class="card">
         <div class="block-title">Backup & transfer</div>
-        <p class="muted small">⚠️ The export contains your home address and the list of sites you have accounts on. Keep it private.</p>
+        <p class="muted small">The export contains your home address and the list of sites you have accounts on. Keep it private.</p>
         <div class="btn-row">
           <button class="primary" data-action="export">Export as JSON</button>
           <label class="file-btn secondary">Import…<input type="file" id="import-file" accept="application/json" hidden></label>
@@ -287,7 +454,10 @@
   // ---- actions -------------------------------------------------------------
 
   async function startMove() {
-    if (!storage.currentAddress(state)) { alert('Set up your current address first.'); return; }
+    if (!storage.currentAddress(state)) {
+      await openModal({ title: 'No address set', message: 'Set up your current address before starting a move.', okLabel: 'OK', hideCancel: true });
+      return;
+    }
     const addr = await openAddressDialog('Your new address', null);
     if (addr) await commit((s) => storage.startMove(s, addr, Date.now()));
   }
@@ -315,11 +485,21 @@
     const replaceAll = $('#replace-all')?.checked;
     let incoming;
     try { incoming = JSON.parse(await file.text()); }
-    catch { alert('That file is not valid JSON.'); return; }
-    if (incoming.schemaVersion !== storage.SCHEMA_VERSION) {
-      alert(`Unsupported backup version (expected ${storage.SCHEMA_VERSION}).`); return;
+    catch {
+      await openModal({ title: 'Import failed', message: 'That file is not valid JSON.', okLabel: 'OK', hideCancel: true });
+      return;
     }
-    if (!confirm(replaceAll ? 'Replace ALL current data with this file?' : 'Merge this file into your current data?')) return;
+    if (incoming.schemaVersion !== storage.SCHEMA_VERSION) {
+      await openModal({ title: 'Import failed', message: `Unsupported backup version (expected ${storage.SCHEMA_VERSION}).`, okLabel: 'OK', hideCancel: true });
+      return;
+    }
+    const { confirmed } = await openModal({
+      title: 'Import backup',
+      message: replaceAll ? 'Replace ALL current data with this file?' : 'Merge this file into your current data?',
+      okLabel: replaceAll ? 'Replace all' : 'Merge',
+      danger: replaceAll,
+    });
+    if (!confirmed) return;
 
     await commit((s) => {
       if (replaceAll) {
@@ -336,7 +516,6 @@
     });
   }
 
-  // Merge incoming items into `target` (array) by id, in place.
   function mergeById(target, incoming) {
     const map = new Map(target.map((x) => [x.id, x]));
     for (const item of incoming || []) map.set(item.id, item);
@@ -349,7 +528,7 @@
   document.addEventListener('click', async (e) => {
     const t = e.target.closest('[data-action]');
     if (!t) return;
-    const { action, key, id, status, variant, tab: newTab } = t.dataset;
+    const { action, key, id, variant, tab: newTab } = t.dataset;
     const now = Date.now();
 
     switch (action) {
@@ -357,42 +536,81 @@
       case 'onboarding': location.href = chrome.runtime.getURL('onboarding/onboarding.html'); break;
 
       case 'start-move': await startMove(); break;
-      case 'complete-move':
-        if (confirm('Complete this move? Tasks are cleared and the new address becomes current.'))
-          await commit((s) => storage.completeMove(s, now));
+      case 'complete-move': {
+        const { confirmed } = await openModal({
+          title: 'Complete move',
+          message: 'Tasks are cleared and the new address becomes current.',
+          okLabel: 'Complete',
+        });
+        if (confirmed) await commit((s) => storage.completeMove(s, now));
         break;
-      case 'cancel-move':
-        if (confirm('Cancel this move? The new address is removed and the old one stays current.'))
-          await commit((s) => storage.cancelMove(s, now));
+      }
+      case 'cancel-move': {
+        const { confirmed } = await openModal({
+          title: 'Cancel move',
+          message: 'The new address is removed and the old one stays current.',
+          okLabel: 'Cancel move',
+          danger: true,
+        });
+        if (confirmed) await commit((s) => storage.cancelMove(s, now));
         break;
+      }
 
       case 'mark-done': await commit((s) => storage.setOverride(s, key, 'done', now)); break;
       case 'mark-needs': await commit((s) => storage.setOverride(s, key, 'needs_update', now)); break;
-      case 'ignore':
-        if (confirm('Ignore this site? It leaves the checklist and stops being monitored.'))
-          await commit((s) => storage.setIgnored(s, key, true));
+      case 'ignore': {
+        const { confirmed } = await openModal({
+          title: 'Ignore site',
+          message: 'This site will be hidden from the list. You can restore it any time from Settings.',
+          okLabel: 'Ignore',
+        });
+        if (confirmed) await commit((s) => storage.setIgnored(s, key, true));
         break;
+      }
       case 'restore': await commit((s) => storage.setIgnored(s, key, false)); break;
-      case 'remove':
-        if (confirm('Remove this entry?')) await commit((s) => storage.removePage(s, key));
+      case 'remove': {
+        const { confirmed } = await openModal({
+          title: 'Delete site',
+          message: 'This will permanently remove the site and all its history.',
+          okLabel: 'Delete',
+          danger: true,
+        });
+        if (confirmed) await commit((s) => storage.removePage(s, key));
         break;
+      }
       case 'edit-note': {
         const cur = state.pages[key]?.note || '';
-        const note = prompt('Note for this site:', cur);
-        if (note !== null) await commit((s) => storage.setNote(s, key, note.trim()));
+        const { confirmed, values } = await openModal({
+          title: 'Note',
+          fields: [{ key: 'note', label: 'Note for this site', default: cur, placeholder: 'Add a note…' }],
+          okLabel: 'Save',
+        });
+        if (confirmed) await commit((s) => storage.setNote(s, key, values.note));
         break;
       }
       case 'add-site': {
-        const url = prompt('Site URL (e.g. https://example.com/account):');
-        if (url && url.trim()) {
-          const title = prompt('A label for it (optional):', '') || '';
-          await commit((s) => storage.addManualSite(s, { rawUrl: url.trim(), title: title.trim() }, now));
+        const { confirmed, values } = await openModal({
+          title: 'Add site',
+          fields: [
+            { key: 'url', label: 'URL', placeholder: 'https://example.com/account', required: true, type: 'url' },
+            { key: 'label', label: 'Label (optional)', placeholder: '' },
+          ],
+          okLabel: 'Add',
+        });
+        if (confirmed && values.url) {
+          await commit((s) => storage.addManualSite(s, { rawUrl: values.url, title: values.label }, now));
         }
         break;
       }
       case 'add-task': {
-        const label = prompt('Task (e.g. "Call electricity provider"):');
-        if (label && label.trim()) await commit((s) => storage.addManualTask(s, { label: label.trim() }, now));
+        const { confirmed, values } = await openModal({
+          title: 'Add task',
+          fields: [{ key: 'label', label: 'Task', placeholder: 'Call electricity provider', required: true }],
+          okLabel: 'Add',
+        });
+        if (confirmed && values.label) {
+          await commit((s) => storage.addManualTask(s, { label: values.label }, now));
+        }
         break;
       }
 
@@ -400,15 +618,33 @@
       case 'del-address': {
         const move = storage.activeMove(state);
         if (move && (move.fromAddressId === id || move.toAddressId === id)) {
-          alert('This address is part of your active move. Complete or cancel the move first.');
+          await openModal({
+            title: 'Cannot delete',
+            message: 'This address is part of your active move. Complete or cancel the move first.',
+            okLabel: 'OK',
+            hideCancel: true,
+          });
           break;
         }
-        if (confirm('Delete this past address?')) await commit((s) => storage.deleteAddress(s, id));
+        const { confirmed } = await openModal({
+          title: 'Delete address',
+          message: 'This past address will be permanently deleted.',
+          okLabel: 'Delete',
+          danger: true,
+        });
+        if (confirmed) await commit((s) => storage.deleteAddress(s, id));
         break;
       }
       case 'add-variant': {
-        const text = prompt('Add an address form to also match (as written on a site):');
-        if (text && text.trim()) await commit((s) => storage.addVariant(s, id, text.trim()));
+        const { confirmed, values } = await openModal({
+          title: 'Add variant',
+          message: 'Add an address form to also match, as written on a site.',
+          fields: [{ key: 'text', label: '', placeholder: 'PO Box 99, Perth WA 6000', required: true }],
+          okLabel: 'Add',
+        });
+        if (confirmed && values.text) {
+          await commit((s) => storage.addVariant(s, id, values.text));
+        }
         break;
       }
       case 'del-variant': await commit((s) => storage.deleteVariant(s, id, variant)); break;
@@ -423,12 +659,59 @@
       await commit((s) => { s.settings[key] = val; });
     } else if (e.target.id === 'import-file' && e.target.files[0]) {
       await importData(e.target.files[0]);
-      e.target.value = ''; // allow re-importing the same file
+      e.target.value = '';
     }
   });
 
-  // Live-update when a scan (or another tab) changes storage.
-  chrome.storage.onChanged.addListener((_c, area) => { if (area === 'local') refresh(); });
+  document.addEventListener('input', (e) => {
+    if (e.target.id === 'sites-search') {
+      sitesQuery = e.target.value;
+      const tbody = document.getElementById('sites-tbody');
+      if (tbody) tbody.innerHTML = buildSiteRows();
+    }
+  });
 
-  refresh();
+  chrome.storage.onChanged.addListener(async (changes, area) => {
+    if (area !== 'local') return;
+    const prevPages = changes.pages?.oldValue || {};
+    const nextPages = changes.pages?.newValue || {};
+    await refresh();
+    for (const [, page] of Object.entries(nextPages)) {
+      if (!prevPages[page.url] && page.everDetected?.length && page.kind !== 'manual') {
+        const addrs = page.everDetected.map(id => storage.addressById(state, id)).filter(Boolean);
+        if (addrs.length) { showToast(page, addrs); break; }
+      }
+    }
+  });
+
+  async function handleUrlParams() {
+    const params = new URLSearchParams(location.search);
+    if (params.get('action') !== 'addVariant') return;
+    const addressId = params.get('addressId');
+    const text = params.get('text') || '';
+    const pageUrl = params.get('pageUrl') || '';
+    const pageTitle = params.get('pageTitle') || '';
+    if (!addressId || !text) return;
+
+    tab = 'addresses';
+    history.replaceState(null, '', location.pathname);
+
+    await refresh();
+
+    const a = storage.addressById(state, addressId);
+    const { confirmed, values } = await openModal({
+      title: 'Add address variant',
+      message: a ? `For: ${address.format(a)}` : '',
+      fields: [{ key: 'text', label: 'Variant text', default: text, required: true }],
+      okLabel: 'Add',
+    });
+    if (confirmed && values.text) {
+      await commit((s) => {
+        storage.addVariant(s, addressId, values.text);
+        if (pageUrl) storage.recordScan(s, { url: pageUrl, rawUrl: pageUrl, title: pageTitle }, [addressId], Date.now());
+      });
+    }
+  }
+
+  refresh().then(handleUrlParams);
 })();

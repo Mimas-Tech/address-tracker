@@ -22,6 +22,8 @@
         <legend>${legend}</legend>
         <label>Street address
           <input data-f="street" placeholder="12 Smith St" autocomplete="off"></label>
+        <label>Unit / Apt / Suite (optional)
+          <input data-f="line2" placeholder="Unit 3" autocomplete="off"></label>
         <label>Suburb
           <input data-f="suburb" placeholder="Adelaide" autocomplete="off"></label>
         <div class="row">
@@ -42,7 +44,7 @@
   function readGroup(name) {
     const root = document.querySelector(`.addr-group[data-name="${name}"]`);
     const val = (f) => root.querySelector(`[data-f="${f}"]`).value.trim();
-    return { street: val('street'), suburb: val('suburb'), state: val('state'), postcode: val('postcode') };
+    return { line2: val('line2'), street: val('street'), suburb: val('suburb'), state: val('state'), postcode: val('postcode') };
   }
 
   function validate(addr) {
@@ -96,5 +98,36 @@
 
   $('#open-dashboard').addEventListener('click', () => {
     location.href = chrome.runtime.getURL('management/management.html');
+  });
+
+  $('#import-file').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const errEl = $('#import-error');
+    errEl.hidden = true;
+
+    let incoming;
+    try { incoming = JSON.parse(await file.text()); }
+    catch {
+      errEl.textContent = 'That file is not valid JSON.';
+      errEl.hidden = false;
+      return;
+    }
+
+    if (incoming.schemaVersion !== storage.SCHEMA_VERSION) {
+      errEl.textContent = `Unsupported backup version (expected ${storage.SCHEMA_VERSION}).`;
+      errEl.hidden = false;
+      return;
+    }
+
+    await storage.update((s) => {
+      s.addresses = incoming.addresses || [];
+      s.moves = incoming.moves || [];
+      s.pages = incoming.pages || {};
+      s.settings = { ...storage.defaultSettings(), ...(incoming.settings || {}) };
+    });
+
+    $('#done-detail').textContent = 'Your backup has been restored. All your addresses and sites are back.';
+    goStep('done');
   });
 })();

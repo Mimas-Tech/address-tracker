@@ -3,11 +3,12 @@
 <head>
   <meta charset="utf-8">
   <title>Address Tracker — Setup</title>
+  <link rel="stylesheet" href="../shared/theme.css">
   <link rel="stylesheet" href="onboarding.css">
 </head>
 <body>
   <main class="card">
-    <h1>🏠 Address Tracker</h1>
+    <h1><img src="../icons/48.png" width="32" height="32" alt=""> Address Tracker</h1>
 
     <!-- Step 1: situation -->
     <section id="step1">
@@ -34,6 +35,13 @@
           <span>I need to chase down everywhere with my old address.</span>
         </button>
       </div>
+      <div class="or-divider"><span>or</span></div>
+      <label class="choice restore-choice">
+        <input type="file" id="import-file" accept="application/json" hidden>
+        <strong>Restore from backup</strong>
+        <span>Import a previously exported file to continue where you left off.</span>
+      </label>
+      <p id="import-error" class="error" hidden></p>
     </section>
 
     <!-- Step 2: address(es) -->

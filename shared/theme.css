@@ -1,0 +1,69 @@
+/* theme.css — Material Design 3 color token system.
+   To add a theme: duplicate the :root block as [data-theme="name"],
+   override the --md-sys-color-* tokens, then set <html data-theme="name"> at runtime.
+   Component CSS must only reference the semantic aliases below, never raw hex. */
+
+/* ---- M3 Dark (default) ----------------------------------------------------- */
+:root {
+  /* M3 system color roles — dark scheme */
+  --md-sys-color-background:             #141218;
+  --md-sys-color-on-background:          #E6E1E5;
+  --md-sys-color-surface:                #1D1B20;
+  --md-sys-color-surface-container:      #211F26;
+  --md-sys-color-surface-container-high: #2B2930;
+  --md-sys-color-on-surface:             #E6E1E5;
+  --md-sys-color-on-surface-variant:     #CAC4D0;
+  --md-sys-color-primary:                #D0BCFF;
+  --md-sys-color-on-primary:             #381E72;
+  --md-sys-color-secondary:              #CCC2DC;
+  --md-sys-color-on-secondary:           #332D41;
+  --md-sys-color-tertiary:               #EFB8C8;
+  --md-sys-color-on-tertiary:            #492532;
+  --md-sys-color-error:                  #F2B8B5;
+  --md-sys-color-on-error:               #601410;
+  --md-sys-color-outline:                #938F99;
+  --md-sys-color-outline-variant:        #49454F;
+
+  /* Custom success token — not in M3 baseline, used for "done" status */
+  --md-custom-color-success:             #2dce89;
+  --md-custom-color-on-success:          #003823;
+
+  /* ---- Semantic aliases — these are the only names component CSS should use -- */
+  --bg:       var(--md-sys-color-background);
+  --card:     var(--md-sys-color-surface);
+  --surface2: var(--md-sys-color-surface-container-high);
+  --surface3: var(--md-sys-color-surface-container);
+  --ink:      var(--md-sys-color-on-surface);
+  --muted:    var(--md-sys-color-on-surface-variant);
+  --line:     var(--md-sys-color-outline-variant);
+  --brand:    var(--md-sys-color-primary);
+  --on-brand: var(--md-sys-color-on-primary);
+  --green:    var(--md-custom-color-success);
+  --on-green: var(--md-custom-color-on-success);
+  --red:      var(--md-sys-color-error);
+  --on-red:   var(--md-sys-color-on-error);
+}
+
+/* ---- Future: M3 Light theme ------------------------------------------------ */
+/* Uncomment and add <html data-theme="m3-light"> to activate.
+[data-theme="m3-light"] {
+  --md-sys-color-background:             #FFFBFE;
+  --md-sys-color-on-background:          #1C1B1F;
+  --md-sys-color-surface:                #FFFBFE;
+  --md-sys-color-surface-container:      #F3EFF4;
+  --md-sys-color-surface-container-high: #ECE6F0;
+  --md-sys-color-on-surface:             #1C1B1F;
+  --md-sys-color-on-surface-variant:     #49454F;
+  --md-sys-color-primary:                #6750A4;
+  --md-sys-color-on-primary:             #FFFFFF;
+  --md-sys-color-secondary:              #625B71;
+  --md-sys-color-on-secondary:           #FFFFFF;
+  --md-sys-color-tertiary:               #7D5260;
+  --md-sys-color-on-tertiary:            #FFFFFF;
+  --md-sys-color-error:                  #B3261E;
+  --md-sys-color-on-error:               #FFFFFF;
+  --md-sys-color-outline:                #79747E;
+  --md-sys-color-outline-variant:        #CAC4D0;
+  --md-custom-color-success:             #1a9e68;
+  --md-custom-color-on-success:          #FFFFFF;
+} */

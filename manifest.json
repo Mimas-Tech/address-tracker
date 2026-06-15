@@ -3,7 +3,7 @@
   "name": "Address Tracker",
   "version": "1.0.0",
   "description": "Quietly tracks every site that has your address, so when you move you have a ready checklist of places to update. All data stays on your device.",
-  "permissions": ["storage", "scripting", "contextMenus"],
+  "permissions": ["storage", "contextMenus"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
@@ -17,12 +17,17 @@
     {
       "matches": ["<all_urls>"],
       "all_frames": false,
+      "run_at": "document_start",
+      "js": ["page-hook.js"],
+      "world": "MAIN"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "all_frames": false,
       "run_at": "document_idle",
       "js": ["shared/constants.js", "shared/detect.js", "shared/address.js", "shared/storage.js", "content.js"],
       "css": ["content.css"]
     }
   ],
-  "web_accessible_resources": [
-    { "resources": ["page-hook.js"], "matches": ["<all_urls>"] }
-  ]
+  "web_accessible_resources": []
 }

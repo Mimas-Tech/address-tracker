@@ -11,7 +11,7 @@
   if (window.top !== window) return; // top frame only; it reaches into same-origin iframes itself
 
   const BANNER_HOST_ID = '__address_tracker_banner__';
-  const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'IFRAME']);
+  const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE']);
   const FIELD_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
   const FOOTER_HEADER = 'footer, header, [role="contentinfo"], [role="banner"]';
 
@@ -59,7 +59,7 @@
     if (node.nodeType !== Node.ELEMENT_NODE) return;
 
     const el = node;
-    if (SKIP_TAGS.has(el.tagName) && el.tagName !== 'IFRAME') return;
+    if (SKIP_TAGS.has(el.tagName)) return;
     if (el.id === BANNER_HOST_ID) return;
     if (settings.skipFooterHeader && el.matches(FOOTER_HEADER)) return;
     if (isHidden(el)) return;
@@ -112,12 +112,7 @@
     };
     const matchedIds = AT.detect.scan(profiles, ctx);
 
-    chrome.runtime.sendMessage({
-      type: 'scan',
-      url: location.href,
-      title: document.title,
-      matchedIds,
-    }).catch(() => { /* worker asleep or context gone */ });
+    send('scan', { title: document.title, matchedIds });
 
     updateBanner(matchedIds);
   }
@@ -148,18 +143,19 @@
       <style>
         .bar { position: fixed; top: 12px; right: 12px; z-index: 2147483647;
                max-width: 360px; font: 13px/1.4 system-ui, sans-serif;
-               background: #1f2937; color: #f9fafb; border-radius: 10px;
-               box-shadow: 0 6px 24px rgba(0,0,0,.35); padding: 12px 14px; }
+               background: #1D1B20; color: #E6E1E5; border-radius: 10px;
+               box-shadow: 0 6px 24px rgba(0,0,0,.5); padding: 12px 14px;
+               border: 1px solid #49454F; }
         .title { font-weight: 600; margin-bottom: 4px; }
-        .addr { color: #fcd34d; margin-bottom: 10px; word-break: break-word; }
+        .addr { color: #D0BCFF; margin-bottom: 10px; word-break: break-word; }
         .row { display: flex; gap: 6px; flex-wrap: wrap; }
         button { font: inherit; border: 0; border-radius: 6px; padding: 5px 9px;
-                 cursor: pointer; background: #374151; color: #f9fafb; }
-        button.primary { background: #2563eb; }
-        button:hover { filter: brightness(1.1); }
+                 cursor: pointer; background: #2B2930; color: #E6E1E5; }
+        button.primary { background: #D0BCFF; color: #381E72; }
+        button:hover { filter: brightness(1.08); }
       </style>
       <div class="bar">
-        <div class="title">🏠 Address Tracker · old address found here</div>
+        <div class="title">Address Tracker · old address found here</div>
         <div class="addr">${escapeHtml(move.newAddressText)}</div>
         <div class="row">
           <button class="primary" data-act="copy">Copy new address</button>
@@ -194,7 +190,9 @@
   }
 
   function send(type, extra = {}) {
-    chrome.runtime.sendMessage({ type, url: location.href, ...extra }).catch(() => {});
+    try {
+      chrome.runtime.sendMessage({ type, url: location.href, ...extra }).catch(() => {});
+    } catch { /* extension reloaded — context no longer valid */ }
   }
 
   function escapeHtml(s) {
@@ -218,13 +216,6 @@
     scanSoon();
   }
 
-  function injectPageHook() {
-    const s = document.createElement('script');
-    s.src = chrome.runtime.getURL('page-hook.js');
-    s.onload = () => s.remove();
-    (document.head || document.documentElement).appendChild(s);
-  }
-
   function watchMutations() {
     if (!settings.rescanOnDomMutation) return;
     new MutationObserver(scanSoon).observe(document.body, { childList: true, subtree: true });
@@ -234,16 +225,19 @@
 
   async function init() {
     await loadConfig();
-    injectPageHook();
     window.addEventListener('at:navigation', onNavigation);
     watchMutations();
 
-    // Rebuild config when addresses/move/settings change (e.g. move started
-    // in another tab), then re-scan.
-    chrome.storage.onChanged.addListener(async (_changes, area) => {
-      if (area !== 'local') return;
-      await loadConfig();
-      scan();
+    // Rebuild config + re-scan only when the things we hunt for change
+    // (addresses/move/settings). We must NOT react to `pages` changes: our own
+    // scans write `pages` via the worker, so reacting to them would loop.
+    chrome.storage.onChanged.addListener(async (changes, area) => {
+      try {
+        if (area !== 'local') return;
+        if (!changes.addresses && !changes.moves && !changes.settings) return;
+        await loadConfig();
+        scan();
+      } catch { /* extension reloaded — context no longer valid */ }
     });
 
     scan();

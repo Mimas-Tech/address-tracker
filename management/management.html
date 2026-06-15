@@ -3,26 +3,43 @@
 <head>
   <meta charset="utf-8">
   <title>Address Tracker</title>
+  <link rel="stylesheet" href="../shared/theme.css">
   <link rel="stylesheet" href="management.css">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">🏠 Address Tracker</div>
+    <div class="brand"><img src="../icons/48.png" width="24" height="24" alt=""> Address Tracker</div>
     <nav class="tabs">
       <button data-action="tab" data-tab="dashboard" class="tab">Dashboard</button>
       <button data-action="tab" data-tab="sites" class="tab">Sites</button>
       <button data-action="tab" data-tab="addresses" class="tab">Addresses</button>
       <button data-action="tab" data-tab="settings" class="tab">Settings</button>
     </nav>
+    <a href="../help/help.html" class="help-link">Help</a>
   </header>
 
   <main id="view"></main>
+
+  <!-- Generic modal: replaces confirm / prompt / alert -->
+  <dialog id="modal">
+    <form>
+      <h3 id="modal-title"></h3>
+      <p id="modal-msg"></p>
+      <div id="modal-fields"></div>
+      <p class="error" id="modal-error" hidden></p>
+      <menu>
+        <button type="button" class="secondary" id="modal-cancel">Cancel</button>
+        <button type="button" class="primary" id="modal-ok">OK</button>
+      </menu>
+    </form>
+  </dialog>
 
   <!-- Reused for Start Move and Edit Address -->
   <dialog id="addr-dialog">
     <form method="dialog">
       <h3 id="addr-dialog-title">New address</h3>
-      <label>Street address<input data-f="street" autocomplete="off"></label>
+      <label>Street address<input data-f="street" autocomplete="off" placeholder="12 Smith St"></label>
+      <label>Unit / Apt / Suite (optional)<input data-f="line2" autocomplete="off" placeholder="Unit 3"></label>
       <label>Suburb<input data-f="suburb" autocomplete="off"></label>
       <div class="row">
         <label>State<select data-f="state"></select></label>
@@ -35,6 +52,8 @@
       </menu>
     </form>
   </dialog>
+
+  <div id="toast-container" class="toast-container"></div>
 
   <script src="../shared/constants.js"></script>
   <script src="../shared/detect.js"></script>

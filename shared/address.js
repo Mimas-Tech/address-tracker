@@ -75,9 +75,17 @@ AT.address = (() => {
     const out = [];
     const suburb = norm(address.suburb);
     const postcode = norm(address.postcode);
-    for (const s of streetForms(address.street)) {
-      for (const st of stateForms(address.state)) {
-        out.push([s, suburb, st, postcode].filter(Boolean).join(' '));
+    // Generate variants for both the bare street and (when line2 present) line2+street combined,
+    // so "Unit 3 12 Smith St Adelaide SA 5000" is a fast-path hit in addition to the bare form.
+    const streetInputs = [address.street];
+    if (address.line2 && address.line2.trim()) {
+      streetInputs.push(address.line2.trim() + ' ' + address.street);
+    }
+    for (const streetVal of streetInputs) {
+      for (const s of streetForms(streetVal)) {
+        for (const st of stateForms(address.state)) {
+          out.push([s, suburb, st, postcode].filter(Boolean).join(' '));
+        }
       }
     }
     return unique(out);
@@ -85,7 +93,8 @@ AT.address = (() => {
 
   // Readable canonical form for display.
   function format(address) {
-    return `${address.street}, ${address.suburb} ${address.state} ${address.postcode}`.trim();
+    const streetLine = address.line2 ? `${address.line2}, ${address.street}` : address.street;
+    return `${streetLine}, ${address.suburb} ${address.state} ${address.postcode}`.trim();
   }
 
   // The matcher's input. Combines generated forms with persisted user variants.

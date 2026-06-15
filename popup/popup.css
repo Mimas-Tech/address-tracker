@@ -4,28 +4,33 @@ body {
   margin: 0;
   width: 300px;
   font: 13px/1.45 system-ui, -apple-system, sans-serif;
-  color: #1f2937;
-  background: #fff;
+  color: var(--ink);
+  background: var(--card);
 }
 
 header {
   font-weight: 600;
   padding: 12px 14px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
+header img { border-radius: 4px; }
 
 #body { padding: 12px 14px 14px; }
-.loading, .empty { color: #6b7280; margin: 6px 0; }
+.loading, .empty { color: var(--muted); margin: 6px 0; }
 
-.block { padding: 10px 0; border-bottom: 1px solid #f3f4f6; }
-.block-title { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; margin-bottom: 3px; }
+.block { padding: 10px 0; border-bottom: 1px solid var(--surface2); }
+.block-title { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 3px; }
 .block-body { font-size: 14px; }
 
-.bar { height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin: 8px 0 4px; }
-.bar span { display: block; height: 100%; background: #2563eb; }
-.bar-label { font-size: 12px; color: #6b7280; }
+.bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; margin: 8px 0 4px; }
+.bar span { display: block; height: 100%; background: var(--brand); }
+.bar-label { font-size: 12px; color: var(--muted); }
 
-.stats { padding: 10px 0 4px; color: #374151; }
+.stats { padding: 10px 0 4px; color: var(--muted); }
 
 .btn-row { display: flex; gap: 8px; margin-top: 12px; }
 .btn-row button {
@@ -36,6 +41,6 @@ header {
   cursor: pointer;
   border: 1px solid transparent;
 }
-.btn-row button.primary { background: #2563eb; color: #fff; }
-.btn-row button.secondary { background: #fff; color: #1f2937; border-color: #e5e7eb; }
-.btn-row button:hover { filter: brightness(1.05); }
+.btn-row button.primary { background: var(--brand); color: var(--on-brand); }
+.btn-row button.secondary { background: var(--surface2); color: var(--ink); border-color: var(--line); }
+.btn-row button:hover { filter: brightness(1.08); }
