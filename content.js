@@ -24,6 +24,7 @@
   // ---- config (kept fresh from storage) ------------------------------------
 
   async function loadConfig() {
+    if (!contextAlive()) return;
     const state = await AT.storage.load();
     settings = state.settings;
     const active = AT.storage.activeMove(state);
@@ -100,7 +101,7 @@
   // ---- scanning ------------------------------------------------------------
 
   function scan() {
-    if (!profiles.length || !document.body) return;
+    if (!contextAlive() || !profiles.length || !document.body) return;
 
     const acc = { text: [], fields: [] };
     if (settings.scanVisibleText) walk(document.body, acc);
@@ -189,10 +190,15 @@
     document.getElementById(BANNER_HOST_ID)?.remove();
   }
 
+  function contextAlive() {
+    try { return !!chrome.runtime?.id; } catch { return false; }
+  }
+
   function send(type, extra = {}) {
+    if (!contextAlive()) return;
     try {
       chrome.runtime.sendMessage({ type, url: location.href, ...extra }).catch(() => {});
-    } catch { /* extension reloaded — context no longer valid */ }
+    } catch { /* context died between check and call */ }
   }
 
   function escapeHtml(s) {
