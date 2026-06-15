@@ -11,8 +11,10 @@ body { margin: 0; background: var(--bg); color: var(--ink);
   padding: 16px 12px; font: inherit; color: var(--muted); cursor: pointer; }
 .tab:hover { color: var(--ink); }
 .tab.active { color: var(--brand); border-bottom-color: var(--brand); }
-.help-link { margin-left: auto; font-size: 13px; color: var(--muted); text-decoration: none; padding: 6px 0; }
-.help-link:hover { color: var(--ink); }
+
+.brand { background: none; border: 0; cursor: pointer; font: inherit; color: var(--ink); }
+.brand:hover { opacity: .85; }
+.help-tab { margin-left: auto; }
 
 #view { max-width: 1100px; margin: 24px auto; padding: 0 16px;
   display: flex; flex-direction: column; gap: 16px; }
@@ -226,3 +228,48 @@ button.primary.danger { background: var(--red); color: var(--on-red); }
 .toast-title { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
 .toast-sub { font-size: 12px; color: var(--muted); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ---- Help tab ------------------------------------------------------------- */
+.help-layout { display: flex; gap: 40px; align-items: flex-start; }
+.help-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 40px; }
+.help-nav-side {
+  width: 160px; flex-shrink: 0; position: sticky; top: 72px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.help-nav-side a {
+  display: block; padding: 7px 10px; border-radius: 8px;
+  font-size: 13px; color: var(--muted); text-decoration: none;
+}
+.help-nav-side a:hover { background: var(--surface2); color: var(--ink); }
+.help-nav-side a.active { background: var(--surface2); color: var(--brand); }
+
+.help-section { scroll-margin-top: 80px; }
+.help-section h2 {
+  font-size: 17px; font-weight: 600; margin: 0 0 12px;
+  padding-bottom: 10px; border-bottom: 1px solid var(--line);
+}
+.help-section h3 {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--muted); margin: 18px 0 6px;
+}
+.help-section p { margin: 0 0 8px; }
+.help-section ol, .help-section ul { margin: 0 0 8px; padding-left: 20px; }
+.help-section li { margin-bottom: 5px; }
+.help-section a { color: var(--brand); text-decoration: none; }
+.help-section a:hover { text-decoration: underline; }
+.help-section dl { margin: 0; }
+.help-section dt { font-weight: 600; font-size: 13px; margin-top: 10px; }
+.help-section dd {
+  margin: 3px 0 0; padding-left: 12px; font-size: 13px;
+  color: var(--muted); border-left: 2px solid var(--line);
+}
+.help-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px;
+  background: var(--surface2); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.help-table th {
+  text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--muted); padding: 8px 12px;
+  background: var(--surface2); border-bottom: 1px solid var(--line);
+}
+.help-table td { padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 13px; }
+.help-table td:first-child { font-weight: 500; white-space: nowrap; width: 160px; }
+.help-table tr:last-child td { border-bottom: none; }

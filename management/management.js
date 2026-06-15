@@ -169,7 +169,7 @@
         <button class="primary" data-action="onboarding">Run setup</button></section>`;
       return;
     }
-    ({ dashboard: renderDashboard, sites: renderSites, addresses: renderAddresses, settings: renderSettings }[tab])();
+    ({ dashboard: renderDashboard, sites: renderSites, addresses: renderAddresses, settings: renderSettings, help: renderHelp }[tab] || renderDashboard)();
   }
 
   // ---- render: dashboard (+ move view) -------------------------------------
@@ -416,6 +416,131 @@
   }
 
   // ---- render: settings ----------------------------------------------------
+
+  function renderHelp() {
+    const sections = [
+      { id: 'setup',       label: 'Getting started' },
+      { id: 'detection',   label: 'How detection works' },
+      { id: 'variants',    label: 'Address variants' },
+      { id: 'moving',      label: 'When you move' },
+      { id: 'sites-table', label: 'The sites table' },
+      { id: 'settings',    label: 'Settings' },
+      { id: 'privacy',     label: 'Privacy' },
+    ];
+    const nav = sections.map((s) =>
+      `<a href="#help-${s.id}" data-help-anchor="help-${s.id}">${s.label}</a>`).join('');
+
+    view.innerHTML = `<div class="help-layout">
+      <div class="help-main">
+
+        <section class="help-section" id="help-setup">
+          <h2>Getting started</h2>
+          <p>Before the extension can detect anything, it needs to know your address. Open the <strong>Addresses</strong> tab and add your current address. That is the only setup required.</p>
+          <p>Once set, the extension scans every page you visit in the background. When it finds your address, that site is added to the Sites tab automatically.</p>
+          <h3>First time checklist</h3>
+          <ol>
+            <li>Add your current address in the Addresses tab.</li>
+            <li>Browse normally — visit your bank, utilities, insurance, subscriptions.</li>
+            <li>Check the Sites tab after a few days to see what has been detected.</li>
+            <li>When you move, click <strong>Start move</strong> on the Dashboard.</li>
+          </ol>
+        </section>
+
+        <section class="help-section" id="help-detection">
+          <h2>How detection works</h2>
+          <p>On each page you visit, the extension scans visible text and pre-filled form fields. It normalises the text and looks for your address using common abbreviations — Street matches St, South Australia matches SA, and so on.</p>
+          <p>Detection happens entirely on your device. The extension never sends page content anywhere.</p>
+          <h3>When a site is not detected</h3>
+          <p>Some sites display addresses in unusual formats — truncated, reordered, or with extra text. If a site has your address but it is not being detected, the fix is to add a variant. You can also right-click any address text on a page and use the Address Tracker context menu to add the site manually.</p>
+        </section>
+
+        <section class="help-section" id="help-variants">
+          <h2>Address variants</h2>
+          <p>A variant is an alternate form of your address — exactly as it appears on a specific site. Common abbreviations are matched automatically. Variants are for anything else.</p>
+          <p><strong>Example:</strong> Your address is 12 Smith Street, Perth WA 6000. A site shows it as Smith St 12, Perth, 6000 WA. That will not match automatically — add it as a variant and it will.</p>
+          <h3>Adding a variant from a page</h3>
+          <p>Select the address text on the site, right-click, and choose <strong>Add as new variant</strong>. The Addresses tab opens with the text pre-filled. Review it and click Add.</p>
+          <h3>Matching an existing variant</h3>
+          <p>If the selected text matches a variant you have already saved, right-click and pick it from the list. This records the page without adding a duplicate.</p>
+        </section>
+
+        <section class="help-section" id="help-moving">
+          <h2>When you move</h2>
+          <p>Click <strong>Start move</strong> on the Dashboard and enter your new address. The extension uses the Sites list as your update checklist.</p>
+          <h3>Working through the checklist</h3>
+          <p>The Dashboard shows Needs Update and Done columns. Visit each site, update your address, then mark it done — from the Dashboard, the Sites table, or the on-page banner.</p>
+          <h3>The on-page banner</h3>
+          <p>When you visit a site that still has your old address, a small banner appears in the top-right corner. It shows your new address to copy, and lets you mark the site done or dismiss the banner for that session. Can be turned off in Settings.</p>
+          <h3>Completing the move</h3>
+          <p>Once all sites are marked done, click <strong>Complete move</strong>. Your new address becomes current, the old one is archived, and the checklist clears. To stop mid-move, click <strong>Cancel move</strong> — the new address is discarded.</p>
+          <h3>Off-web tasks</h3>
+          <p>Some updates have no website — calling HR, visiting a post office, updating a driver's licence. Add these as tasks from the Sites tab using <strong>+ Add task</strong>. They appear in the checklist alongside detected sites.</p>
+        </section>
+
+        <section class="help-section" id="help-sites-table">
+          <h2>The sites table</h2>
+          <table class="help-table">
+            <thead><tr><th>Column</th><th>What it shows</th></tr></thead>
+            <tbody>
+              <tr><td>Domain</td><td>Click to open the site. Hover to see the full URL.</td></tr>
+              <tr><td>Page</td><td>Page title at the time of detection. Notes appear below if added.</td></tr>
+              <tr><td>Address detected</td><td>The form of your address found on that page.</td></tr>
+              <tr><td>Status</td><td>Only shown during a move: Needs Update or Done.</td></tr>
+              <tr><td>Actions</td><td>Note, Ignore, Delete — see below.</td></tr>
+            </tbody>
+          </table>
+          <h3>Actions</h3>
+          <dl>
+            <dt>Note</dt><dd>Add a private note — useful for login hints or special instructions.</dd>
+            <dt>Ignore</dt><dd>Hide this site from the list. Restorable from Settings.</dd>
+            <dt>Delete</dt><dd>Permanently remove the site and all its history. Cannot be undone.</dd>
+          </dl>
+        </section>
+
+        <section class="help-section" id="help-settings">
+          <h2>Settings</h2>
+          <h3>Detection</h3>
+          <dl>
+            <dt>Scan visible page text</dt><dd>The main detection method. Scans rendered text on every page you visit.</dd>
+            <dt>Scan pre-filled form values</dt><dd>Checks input fields for your address. Useful for account settings pages.</dd>
+            <dt>Skip footers and headers</dt><dd>Reduces false positives from sites that print your address in every page footer.</dd>
+            <dt>Re-scan when the page changes</dt><dd>Watches for DOM changes and re-scans. Enable for single-page apps (SPAs).</dd>
+            <dt>Show on-page banner during a move</dt><dd>Shows the update banner when your old address is found. Disable if disruptive.</dd>
+          </dl>
+          <h3>Backup and transfer</h3>
+          <p><strong>Export</strong> saves your addresses, sites list, and move history as a JSON file. Use this to back up your data or move it to another device.</p>
+          <p><strong>Import</strong> loads a previously exported file. You can merge it with existing data or replace everything. The file contains your home address — keep it private.</p>
+        </section>
+
+        <section class="help-section" id="help-privacy">
+          <h2>Privacy</h2>
+          <p>Everything the extension stores stays on this device. No data is sent to any server. The extension makes no network requests of its own.</p>
+          <p>The extension reads page content only to search for your address. It does not read passwords, payment details, or anything unrelated to address detection.</p>
+          <p>If you uninstall the extension, all stored data is deleted by the browser. Export first if you want to keep your sites list.</p>
+        </section>
+
+      </div>
+      <nav class="help-nav-side">${nav}</nav>
+    </div>`;
+
+    const navLinks = view.querySelectorAll('[data-help-anchor]');
+    const helpSections = view.querySelectorAll('.help-section');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) {
+          navLinks.forEach((a) => a.classList.toggle('active', a.dataset.helpAnchor === e.target.id));
+        }
+      });
+    }, { rootMargin: '-15% 0px -70% 0px' });
+    helpSections.forEach((s) => observer.observe(s));
+
+    navLinks.forEach((a) => {
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        view.querySelector('#' + a.dataset.helpAnchor)?.scrollIntoView({ behavior: 'smooth' });
+      });
+    });
+  }
 
   function renderSettings() {
     const s = state.settings;
