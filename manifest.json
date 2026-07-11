@@ -29,5 +29,8 @@
       "js": ["shared/constants.js", "shared/detect.js", "shared/address.js", "shared/storage.js", "content.js"],
       "css": ["content.css"]
     }
+  ],
+  "web_accessible_resources": [
+    { "resources": ["icons/48.png"], "matches": ["<all_urls>"] }
   ]
 }

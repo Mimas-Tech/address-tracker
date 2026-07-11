@@ -133,33 +133,21 @@
 
   function showBanner() {
     if (document.getElementById(BANNER_HOST_ID)) return;
+    if (!contextAlive()) return;
 
     const host = document.createElement('div');
     host.id = BANNER_HOST_ID;
     const root = host.attachShadow({ mode: 'open' });
     root.innerHTML = `
-      <style>
-        .bar { position: fixed; top: 12px; right: 12px; z-index: 2147483647;
-               max-width: 360px; font: 13px/1.4 system-ui, sans-serif;
-               background: #1D1B20; color: #E6E1E5; border-radius: 3px;
-               box-shadow: 0 6px 24px rgba(0,0,0,.5); padding: 12px 14px;
-               border: 1px solid #49454F; }
-        .title { font-weight: 600; margin-bottom: 4px; }
-        .addr { color: #D0BCFF; margin-bottom: 10px; word-break: break-word; }
-        .row { display: flex; gap: 6px; flex-wrap: wrap; }
-        button { font: inherit; border: 0; border-radius: 3px; padding: 5px 10px;
-                 cursor: pointer; background: #2B2930; color: #E6E1E5; }
-        button.primary { background: #D0BCFF; color: #381E72; }
-        button:hover { filter: brightness(1.08); }
-      </style>
+      <style>${cardStyles()}</style>
       <div class="bar">
-        <div class="title">Address Tracker · old address found here</div>
+        ${cardHead()}
+        <div class="msg">This page still shows your <b>old address</b>. Your new address:</div>
         <div class="addr">${escapeHtml(move.newAddressText)}</div>
         <div class="row">
           <button class="primary" data-act="copy">Copy new address</button>
           <button data-act="done">Mark as Done</button>
           <button data-act="ignore">Not mine</button>
-          <button data-act="dismiss">✕</button>
         </div>
       </div>`;
 
@@ -187,11 +175,58 @@
     document.getElementById(BANNER_HOST_ID)?.remove();
   }
 
+  // Shared look for the toast and the banner.
+  function cardStyles() {
+    return `
+      .bar { position: fixed; top: 16px; right: 16px; z-index: 2147483647;
+             width: 340px; max-width: calc(100vw - 32px);
+             font: 13px/1.45 system-ui, -apple-system, sans-serif;
+             background: #1D1B20; color: #E6E1E5; border-radius: 3px;
+             box-shadow: 0 12px 40px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.35);
+             border: 1px solid #49454F; border-top: 2px solid #D0BCFF;
+             padding: 12px 14px 14px; animation: at-in .25s ease; }
+      @keyframes at-in { from { opacity: 0; transform: translateY(-10px); }
+                         to   { opacity: 1; transform: none; } }
+      .head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .head img { width: 20px; height: 20px; flex: none; }
+      .name { font-weight: 600; font-size: 13px; flex: 1; letter-spacing: .01em; }
+      .x { flex: none; background: transparent; border: 0; color: #938F99;
+           font: 14px/1 system-ui, sans-serif; cursor: pointer; padding: 2px 6px;
+           border-radius: 3px; }
+      .x:hover { color: #E6E1E5; background: #2B2930; }
+      .msg { color: #CAC4D0; margin-bottom: 12px; }
+      .msg b { color: #E6E1E5; font-weight: 600; }
+      .addr { color: #D0BCFF; margin-bottom: 12px; word-break: break-word; }
+      .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+      .divider { height: 1px; background: #36343B; margin: 12px -14px; }
+      .lbl { color: #938F99; font-size: 12px; }
+      button { font: inherit; border: 0; border-radius: 3px; padding: 5px 10px;
+               cursor: pointer; background: #2B2930; color: #E6E1E5; }
+      button.primary { background: #D0BCFF; color: #381E72; font-weight: 600; }
+      button.ghost { background: transparent; border: 1px solid #49454F; color: #CAC4D0;
+                     font-size: 12px; max-width: 150px;
+                     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      button:hover { filter: brightness(1.15); }
+      input { flex: 1; min-width: 0; font: inherit; font-size: 12px; padding: 5px 8px;
+              background: #2B2930; color: #E6E1E5; border: 1px solid #49454F;
+              border-radius: 3px; outline: none; }
+      input:focus { border-color: #D0BCFF; }`;
+  }
+
+  function cardHead() {
+    return `
+      <div class="head">
+        <img src="${chrome.runtime.getURL('icons/48.png')}" alt="">
+        <span class="name">Address Tracker</span>
+        <button class="x" data-act="dismiss" title="Dismiss">✕</button>
+      </div>`;
+  }
+
   // Detection toast: a new site awaits confirmation — save it, or exclude the
   // page / domain / an edited prefix.
   function showDetectToast(matchedIds) {
     if (toastDismissed || document.getElementById(TOAST_HOST_ID)) return;
-    if (!document.body) return;
+    if (!document.body || !contextAlive()) return;
 
     const key = AT.storage.normalizeUrl(location.href);
     const domain = AT.storage.domainOf(key);
@@ -200,43 +235,23 @@
     host.id = TOAST_HOST_ID;
     const root = host.attachShadow({ mode: 'open' });
     root.innerHTML = `
-      <style>
-        .bar { position: fixed; top: 12px; right: 12px; z-index: 2147483647;
-               max-width: 380px; font: 13px/1.4 system-ui, sans-serif;
-               background: #1D1B20; color: #E6E1E5; border-radius: 3px;
-               box-shadow: 0 6px 24px rgba(0,0,0,.5); padding: 12px 14px;
-               border: 1px solid #49454F; }
-        .title { font-weight: 600; margin-bottom: 4px; }
-        .msg { color: #CAC4D0; margin-bottom: 10px; }
-        .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-        .row + .row { margin-top: 8px; }
-        .lbl { color: #938F99; font-size: 12px; }
-        button { font: inherit; border: 0; border-radius: 3px; padding: 5px 10px;
-                 cursor: pointer; background: #2B2930; color: #E6E1E5; }
-        button.primary { background: #D0BCFF; color: #381E72; }
-        button.ghost { background: transparent; border: 1px solid #49454F; color: #CAC4D0;
-                       font-size: 12px; max-width: 160px;
-                       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        button:hover { filter: brightness(1.15); }
-        input { flex: 1; min-width: 0; font: inherit; font-size: 12px; padding: 5px 8px;
-                background: #2B2930; color: #E6E1E5; border: 1px solid #49454F;
-                border-radius: 3px; outline: none; }
-        input:focus { border-color: #D0BCFF; }
-      </style>
+      <style>${cardStyles()}</style>
       <div class="bar">
-        <div class="title">Address Tracker · address detected</div>
-        <div class="msg">Save this site to your update list?</div>
+        ${cardHead()}
+        <div class="msg">Your address was found on <b>${escapeHtml(domain)}</b>.
+          Save this site to your update list?</div>
         <div class="row">
           <button class="primary" data-act="save">Save site</button>
           <button data-act="dismiss">Not now</button>
         </div>
+        <div class="divider"></div>
         <div class="row">
           <span class="lbl">Ignore:</span>
           <button class="ghost" data-act="ig-page">This page</button>
           <button class="ghost" data-act="ig-domain" title="${escapeHtml(domain)}">${escapeHtml(domain)}</button>
           <button class="ghost" data-act="ig-prefix">Prefix…</button>
         </div>
-        <div class="row" data-prefix-row hidden>
+        <div class="row" data-prefix-row hidden style="margin-top:8px">
           <input type="text" value="${escapeHtml(key)}" spellcheck="false">
           <button data-act="ig-prefix-ok">Ignore</button>
         </div>
@@ -246,10 +261,10 @@
       send('save-page', { title: document.title, matchedIds });
       removeToast();
     });
-    root.querySelector('[data-act="dismiss"]').addEventListener('click', () => {
+    root.querySelectorAll('[data-act="dismiss"]').forEach((b) => b.addEventListener('click', () => {
       toastDismissed = true; // this session only; asks again next visit
       removeToast();
-    });
+    }));
     root.querySelector('[data-act="ig-page"]').addEventListener('click', () => {
       send('ignore', { title: document.title });
       toastDismissed = true;
