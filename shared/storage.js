@@ -1,14 +1,6 @@
-// shared/storage.js — the single source of truth.
-//
-// Everything lives in one flat chrome.storage.local store. This file owns:
-//   - load/save and the default shape
-//   - URL normalization (the `pages` key)
-//   - status derivation (no status is ever stored on a detected page)
-//   - state transitions (start/complete/cancel move, record a scan, etc.)
-//
-// Transitions are plain functions that mutate and return a state object, so the
-// service worker can load -> transform -> save, and they can be unit-tested
-// without Chrome. Nothing here touches the DOM.
+// Single source of truth over chrome.storage.local: persistence, URL
+// normalization, status derivation, and all state transitions. Transitions are
+// plain state-mutating functions so they're unit-testable without Chrome.
 globalThis.AT = globalThis.AT || {};
 
 AT.storage = (() => {
@@ -24,6 +16,7 @@ AT.storage = (() => {
       skipFooterHeader: true,
       rescanOnDomMutation: true,
       showBanner: true,
+      confirmDetections: true, // ask on-page before saving a newly detected site
     };
   }
 
@@ -37,8 +30,6 @@ AT.storage = (() => {
       ignoreRules: [],
     };
   }
-
-  // ---- persistence ---------------------------------------------------------
 
   async function load() {
     const stored = await chrome.storage.local.get(KEYS);
@@ -62,11 +53,9 @@ AT.storage = (() => {
     });
   }
 
-  // Load, apply a transition, save — the one pattern callers use. Only the
-  // top-level keys that actually changed are written, so a scan that just
-  // refreshes `pages` never looks like an addresses/moves/settings change to
-  // listeners (this is what stops content.js from re-scanning in a loop), and a
-  // no-op transition writes nothing at all.
+  // Load -> transition -> save. Writes only the top-level keys that changed:
+  // a pages-only scan must never look like an addresses/moves/settings change
+  // to listeners, or content.js would re-scan in a loop.
   async function update(fn) {
     const state = await load();
     const before = {
@@ -87,14 +76,11 @@ AT.storage = (() => {
       out.schemaVersion = state.schemaVersion ?? SCHEMA_VERSION;
       await chrome.storage.local.set(out);
     }
-    return result; // whatever the transition chose to return (or undefined)
+    return result;
   }
 
-  // ---- URL normalization (the pages key) -----------------------------------
-
-  // The page's identity is host + path only. All query params and the fragment
-  // are dropped — params are overwhelmingly session/tracking noise that would
-  // spawn duplicate entries for the same page.
+  // Page identity is host + path; query params and fragment are dropped
+  // (they're overwhelmingly session/tracking noise that spawns duplicates).
   function normalizeUrl(raw) {
     try {
       const u = new URL(raw);
@@ -108,12 +94,9 @@ AT.storage = (() => {
 
   const domainOf = (key) => key.split('/')[0];
 
-  // ---- ignore rules ----------------------------------------------------------
-  // A rule is a prefix on the normalized URL key: "google.com" (whole domain) or
-  // "google.com/maps" (everything starting with). Matching pages are never
-  // tracked; rules are managed in Settings and only removed by the user.
+  // Exclude rules: prefixes on the normalized URL key — "google.com" (whole
+  // domain) or "google.com/maps" (starts-with). Matching pages are never tracked.
 
-  // User input -> rule form: no scheme, no www, no trailing slash, lowercase.
   function normalizeRule(text) {
     return String(text || '')
       .trim()
@@ -123,8 +106,7 @@ AT.storage = (() => {
       .replace(/\/+$/, '');
   }
 
-  // A bare domain rule must not swallow "google.com.au"; a rule with a path is
-  // a plain prefix ("google.com/map" covers /maps, /map-tools, …).
+  // A bare domain rule must not swallow "google.com.au"; a rule with a path is a plain prefix.
   function ruleMatches(rule, key) {
     const k = key.toLowerCase();
     if (rule.includes('/')) return k.startsWith(rule);
@@ -134,9 +116,8 @@ AT.storage = (() => {
   const isRuleIgnored = (state, key) =>
     (state.ignoreRules || []).some((r) => ruleMatches(r, key));
 
-  // Optionally also flags already-saved matching entries as ignored, so the
-  // list cleans up in the same action. Removing the rule later does NOT
-  // un-flag them — pages are restored individually from Settings.
+  // applyToExisting also flags saved matching entries. Removing the rule later
+  // does NOT un-flag them — pages are restored individually from Settings.
   function addIgnoreRule(state, text, applyToExisting) {
     const rule = normalizeRule(text);
     if (!rule) return null;
@@ -154,24 +135,20 @@ AT.storage = (() => {
     state.ignoreRules = (state.ignoreRules || []).filter((r) => r !== rule);
   }
 
-  // ---- selectors -----------------------------------------------------------
-
   const activeMove = (state) => state.moves.find((m) => m.status === 'in_progress') || null;
   const currentAddress = (state) => state.addresses.find((a) => a.status === 'current') || null;
   const addressById = (state, id) => state.addresses.find((a) => a.id === id) || null;
 
-  // Is this page part of the active move? Old address was once seen here, or it
-  // was added manually during this move. Ignored pages are never in scope.
+  // In scope of the move: old address was once seen here, or added manually
+  // during this move. Ignored pages never count.
   function inScope(page, move) {
     if (!move || page.ignored) return false;
     return page.everDetected.includes(move.fromAddressId) || page.moveId === move.id;
   }
 
-  // Status is always derived (see Status Lifecycle). Precedence:
-  //   1. old address on the page right now  -> needs_update (beats an override)
-  //   2. explicit user override
-  //   3. new address has been seen          -> done
-  //   4. otherwise                          -> needs_update
+  // Status is always derived, never stored. Precedence:
+  //   old address on the page now -> needs_update (beats an override),
+  //   then user override, then new-address-seen -> done, else needs_update.
   function deriveStatus(page, move) {
     if (!move || !inScope(page, move)) return 'up_to_date';
     if (page.statusOverride) return page.statusOverride;
@@ -180,7 +157,6 @@ AT.storage = (() => {
     return 'needs_update';
   }
 
-  // { done, needs, total } over in-scope entries, or null with no move.
   function progress(state) {
     const move = activeMove(state);
     if (!move) return null;
@@ -192,8 +168,6 @@ AT.storage = (() => {
     }
     return { done, needs, total: done + needs };
   }
-
-  // ---- factories -----------------------------------------------------------
 
   function makeAddress(fields, status, now) {
     return {
@@ -232,9 +206,6 @@ AT.storage = (() => {
     };
   }
 
-  // ---- transitions: addresses ----------------------------------------------
-
-  // First-ever address (onboarding "not moving yet").
   function setInitialAddress(state, fields, now) {
     const addr = makeAddress(fields, 'current', now);
     state.addresses.push(addr);
@@ -259,7 +230,7 @@ AT.storage = (() => {
     sweepAddressId(state, id);
   }
 
-  // Drop a now-deleted address id from every page's detection sets.
+  // Drops a deleted address id from every page's detection sets.
   function sweepAddressId(state, id) {
     for (const page of Object.values(state.pages)) {
       page.everDetected = page.everDetected.filter((x) => x !== id);
@@ -280,13 +251,11 @@ AT.storage = (() => {
     if (addr) addr.flaggedVariants = addr.flaggedVariants.filter((v) => v !== variant);
   }
 
-  // ---- transitions: moves --------------------------------------------------
-
-  // Promote the new address to current, demote the old to past, open a move.
-  // No bulk status write: in-scope pages derive to needs_update automatically.
+  // New address becomes current, old becomes past. No bulk status write:
+  // in-scope pages derive to needs_update automatically.
   function startMove(state, newFields, now) {
     const from = currentAddress(state);
-    if (!from) return null; // need a current address to move away from
+    if (!from) return null;
     const to = makeAddress(newFields, 'current', now);
     from.status = 'past';
     state.addresses.push(to);
@@ -299,7 +268,7 @@ AT.storage = (() => {
       status: 'in_progress',
     };
     state.moves.push(move);
-    clearOverrides(state); // clear anything stale from a prior move
+    clearOverrides(state);
     return move;
   }
 
@@ -309,11 +278,11 @@ AT.storage = (() => {
     move.status = 'completed';
     move.completedAt = now;
     clearOverrides(state);
-    removeMoveTasks(state, move.id); // one-time to-dos don't outlive the move
+    removeMoveTasks(state, move.id); // move tasks are one-time to-dos
     return move;
   }
 
-  // Undo the swap and delete the address record created for the move.
+  // Reverts the address swap and deletes the address created for the move.
   function cancelMove(state, now) {
     const move = activeMove(state);
     if (!move) return null;
@@ -321,7 +290,7 @@ AT.storage = (() => {
     move.completedAt = now;
     const from = addressById(state, move.fromAddressId);
     if (from) from.status = 'current';
-    deleteAddress(state, move.toAddressId); // also sweeps dangling ids
+    deleteAddress(state, move.toAddressId);
     clearOverrides(state);
     removeMoveTasks(state, move.id);
     return move;
@@ -337,17 +306,43 @@ AT.storage = (() => {
     }
   }
 
-  // ---- transitions: pages --------------------------------------------------
+  // What to do with a scan result before anything is written:
+  //   'record' — save it (already-tracked page, confirmation off, or the move's
+  //              old address — that one is never allowed to slip through)
+  //   'prompt' — ask the user on-page before saving (new site, confirmation on)
+  //   'skip'   — nothing to do (excluded, or no match on an unknown page)
+  function scanDecision(state, key, matchedIds) {
+    if (isRuleIgnored(state, key)) return 'skip';
+    const existing = state.pages[key];
+    if (existing) return existing.ignored ? 'skip' : 'record';
+    if (!matchedIds.length) return 'skip';
+    if (!state.settings.confirmDetections) return 'record';
+    const move = activeMove(state);
+    if (move && matchedIds.includes(move.fromAddressId)) return 'record';
+    return 'prompt';
+  }
 
-  // Record a content-script scan. `matchedIds` are the addresses found now.
-  // Creates a page only when something matched; ignored pages are left alone.
+  // Exclude a page even if it was never saved: create the entry if needed and
+  // flag it, so the toast's "ignore page" works before the page is in the ledger.
+  function ignorePage(state, { url, rawUrl, title }, now) {
+    const key = normalizeUrl(url);
+    if (!state.pages[key]) {
+      state.pages[key] = makePage({
+        domain: domainOf(key), url: key, rawUrl: rawUrl || url, title: title || '',
+      }, now);
+    }
+    state.pages[key].ignored = true;
+    return key;
+  }
+
+  // Creates a page only when something matched; excluded pages are left alone.
   function recordScan(state, { url, rawUrl, title }, matchedIds, now) {
     const key = normalizeUrl(url);
-    if (isRuleIgnored(state, key)) return null; // rule-ignored: never tracked
+    if (isRuleIgnored(state, key)) return null;
     const existing = state.pages[key];
 
     if (existing) {
-      if (existing.ignored) return null; // not monitored
+      if (existing.ignored) return null;
       existing.lastDetected = [...matchedIds];
       for (const id of matchedIds) {
         if (!existing.everDetected.includes(id)) existing.everDetected.push(id);
@@ -357,7 +352,7 @@ AT.storage = (() => {
       return key;
     }
 
-    if (matchedIds.length === 0) return null; // nothing to track yet
+    if (matchedIds.length === 0) return null;
     state.pages[key] = makePage({
       domain: domainOf(key),
       url: key,
@@ -369,10 +364,10 @@ AT.storage = (() => {
     return key;
   }
 
-  // A site you remember but haven't visited. In scope if a move is active.
+  // A site the user remembers but hasn't visited. In scope if a move is active.
   function addManualSite(state, { rawUrl, title, note }, now) {
     const key = normalizeUrl(rawUrl);
-    if (state.pages[key]) return key; // already tracked
+    if (state.pages[key]) return key;
     const move = activeMove(state);
     state.pages[key] = makePage({
       domain: domainOf(key),
@@ -386,7 +381,7 @@ AT.storage = (() => {
     return key;
   }
 
-  // An off-web task (phone call, in person, mail). Only meaningful in a move.
+  // An off-web task (phone call, in person, mail). Only exists within a move.
   function addManualTask(state, { label, note }, now) {
     const move = activeMove(state);
     if (!move) return null;
@@ -404,7 +399,7 @@ AT.storage = (() => {
   function setOverride(state, key, status, now) {
     const page = state.pages[key];
     if (!page) return;
-    page.statusOverride = status; // 'needs_update' | 'done' | null
+    page.statusOverride = status;
     page.statusChangedAt = now;
   }
 
@@ -413,8 +408,7 @@ AT.storage = (() => {
     if (page) page.ignored = ignored;
   }
 
-  // Hard delete — only for manually-added entries (detected pages would just
-  // come back; those use ignore instead).
+  // Hard delete. A still-detected page will be re-tracked on the next visit.
   function removePage(state, key) {
     delete state.pages[key];
   }
@@ -432,6 +426,7 @@ AT.storage = (() => {
     activeMove, currentAddress, addressById, inScope, deriveStatus, progress,
     setInitialAddress, editAddress, deleteAddress, addVariant, deleteVariant,
     startMove, completeMove, cancelMove,
+    scanDecision, ignorePage,
     recordScan, addManualSite, addManualTask, setOverride, setIgnored, removePage, setNote,
   };
 })();

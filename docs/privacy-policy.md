@@ -24,7 +24,7 @@ your device only:
   and which of your addresses matched. The extension **never stores page content
   or form values** — only the fact that an address matched.
 - **Your notes, statuses, and settings** — anything you add or configure in the
-  extension's own pages, including ignore rules.
+  extension's own pages, including exclude rules.
 
 ## How page scanning works
 
@@ -33,7 +33,7 @@ pre-filled form fields of pages you visit. Scanning happens entirely on your
 device, in the browser. Page content is matched against your saved addresses and
 then discarded; it is never stored and never leaves your machine. Scanning of
 form values can be turned off in Settings, and you can exclude any page, domain,
-or URL prefix with ignore rules.
+or URL prefix from scanning entirely.
 
 ## What is shared with anyone
 

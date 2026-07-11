@@ -1,9 +1,5 @@
-// page-hook.js — runs in the page's MAIN world (injected by content.js).
-//
-// A content script lives in an isolated world and can't see the page's own
-// history.pushState/replaceState calls. This tiny shim wraps them and fires a
-// plain DOM event on window, which the content script listens for to re-scan
-// after SPA navigations. The event carries no data, so it crosses worlds fine.
+// MAIN-world shim: content scripts can't observe the page's own pushState/
+// replaceState, so wrap them and fire a DOM event the content script hears.
 (() => {
   const fire = () => window.dispatchEvent(new Event('at:navigation'));
   for (const method of ['pushState', 'replaceState']) {

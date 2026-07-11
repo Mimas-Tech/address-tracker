@@ -1,9 +1,5 @@
-// shared/address.js — structured AU address handling.
-//
-// Turns the stored {street, suburb, state, postcode} fields into:
-//   - a readable canonical string (for display), and
-//   - a normalized "profile" the matcher consumes.
-// Auto-generated forms live only in memory; only user-flagged variants persist.
+// Turns structured AU address fields into a display string and the matcher's
+// "profile". Generated forms live in memory; only user-flagged variants persist.
 globalThis.AT = globalThis.AT || {};
 
 AT.address = (() => {
@@ -11,16 +7,15 @@ AT.address = (() => {
   const norm = AT.detect.normalize;
   const unique = (arr) => [...new Set(arr.filter(Boolean))];
 
-  // full word -> every abbreviation that expands to it ("avenue" -> [ave, av]).
+  // "avenue" -> [ave, av]
   const FULL_TO_ABBRS = {};
   for (const [abbr, full] of Object.entries(STREET_TYPES)) {
     (FULL_TO_ABBRS[full] ||= []).push(abbr);
   }
 
-  // All written forms of a street line, differing only in the street-type word:
-  //   "12 Smith St" -> ["12 smith st", "12 smith street"]
-  // Leading "St" (Saint, as in "St Kilda Rd") is the first token, never the
-  // last, so it is left untouched.
+  // "12 Smith St" -> ["12 smith st", "12 smith street"]. Only the LAST token is
+  // treated as a street type, so a leading "St" (Saint, as in "St Kilda Rd")
+  // survives untouched.
   function streetForms(street) {
     const toks = norm(street).split(' ');
     if (toks.length < 2) return unique([toks.join(' ')]);
@@ -28,15 +23,14 @@ AT.address = (() => {
     const last = toks[toks.length - 1];
     const base = toks.slice(0, -1).join(' ');
     let full = null;
-    if (STREET_TYPES[last]) full = STREET_TYPES[last];        // last token is an abbreviation
-    else if (FULL_TO_ABBRS[last]) full = last;                 // last token is already the full word
+    if (STREET_TYPES[last]) full = STREET_TYPES[last];
+    else if (FULL_TO_ABBRS[last]) full = last;
     if (!full) return unique([toks.join(' ')]);
 
     return unique([base + ' ' + full, ...FULL_TO_ABBRS[full].map((a) => base + ' ' + a)]);
   }
 
-  // Drop the leading unit/number prefix to get the street-name anchor:
-  //   "unit 3 12 smith st" -> "smith st"
+  // "unit 3 12 smith st" -> "smith st"
   function stripNumber(form) {
     const toks = form.split(' ');
     let i = 0;
@@ -44,7 +38,7 @@ AT.address = (() => {
     return toks.slice(i).join(' ');
   }
 
-  // The primary street number — the last numeric token before the street name.
+  // The last numeric token before the street name ("unit 3, 12 smith st" -> "12").
   function streetNumber(street) {
     const toks = norm(street).split(' ');
     let num = '';
@@ -56,7 +50,7 @@ AT.address = (() => {
     return num;
   }
 
-  // Both written forms of a state: code and full name ("SA" <-> "south australia").
+  // "SA" <-> "south australia"
   function stateForms(state) {
     const n = norm(state);
     const forms = new Set([n].filter(Boolean));
@@ -69,14 +63,12 @@ AT.address = (() => {
     return [...forms];
   }
 
-  // Whole normalized address strings, every street/state form combined. Used as
-  // the matcher's fast path; never persisted.
+  // Whole normalized address strings for the matcher's fast path; never persisted.
   function generatedVariants(address) {
     const out = [];
     const suburb = norm(address.suburb);
     const postcode = norm(address.postcode);
-    // Generate variants for both the bare street and (when line2 present) line2+street combined,
-    // so "Unit 3 12 Smith St Adelaide SA 5000" is a fast-path hit in addition to the bare form.
+    // With line2 set, both the bare street and line2+street forms are hits.
     const streetInputs = [address.street];
     if (address.line2 && address.line2.trim()) {
       streetInputs.push(address.line2.trim() + ' ' + address.street);
@@ -91,13 +83,11 @@ AT.address = (() => {
     return unique(out);
   }
 
-  // Readable canonical form for display.
   function format(address) {
     const streetLine = address.line2 ? `${address.line2}, ${address.street}` : address.street;
     return `${streetLine}, ${address.suburb} ${address.state} ${address.postcode}`.trim();
   }
 
-  // The matcher's input. Combines generated forms with persisted user variants.
   function buildProfile(address) {
     const flagged = (address.flaggedVariants || []).map(norm);
     return {

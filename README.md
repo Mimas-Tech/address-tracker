@@ -18,8 +18,9 @@ Store listing copy and permission justifications live in
 
 ## Release TODO
 
-- [ ] **Host the privacy policy publicly** (e.g. enable GitHub Pages on `docs/`)
-      and paste the URL into the store listing's Privacy tab.
+- [x] **Host the privacy policy publicly** — live at
+      [github.com/Mimas-Tech/address-tracker/docs/privacy-policy.md](https://github.com/Mimas-Tech/address-tracker/blob/main/docs/privacy-policy.md);
+      paste this URL into the store listing's Privacy tab.
 - [ ] **Take screenshots** — save them in `docs/screenshots/` (kept out of the
       store zip automatically), sized **1280×800** PNG or JPEG (640×400 also
       accepted; up to 5 total). Shots to take:

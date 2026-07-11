@@ -1,5 +1,4 @@
-// popup.js — quick status: current address, move progress, counts, and the
-// jump-off buttons. Read-only except for opening other pages.
+// Toolbar popup: read-only status plus links into the extension pages.
 (() => {
   const { storage, address } = AT;
   const body = document.getElementById('body');

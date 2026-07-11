@@ -1,14 +1,10 @@
-// shared/detect.js — local text normalization + AU address matching.
-//
-// No API, no libpostal. Addresses arrive as a prepared "profile" (built by
-// address.js) and are matched against a page context: visible text plus the
-// values of individual form fields. The street name is the required anchor.
+// Local AU address matching: profiles (from address.js) vs a page context of
+// visible text + form-field values. The street name is the required anchor.
 globalThis.AT = globalThis.AT || {};
 
 AT.detect = (() => {
-  // Lowercase, turn every run of non-alphanumerics into a single space.
-  // Both stored variants and page text go through this, so punctuation,
-  // commas and odd whitespace never affect a match.
+  // Both stored variants and page text pass through this, so punctuation and
+  // whitespace never affect a match.
   function normalize(str) {
     return String(str == null ? '' : str)
       .toLowerCase()
@@ -16,16 +12,15 @@ AT.detect = (() => {
       .trim();
   }
 
-  // Whole-word phrase containment. Both arguments must already be normalized.
-  // Padding with spaces means "smith st" never matches inside "blacksmith stay".
+  // Whole-word containment: padding with spaces stops "smith st" matching
+  // inside "blacksmith stay". Both arguments must already be normalized.
   function containsPhrase(haystack, phrase) {
     if (!phrase) return false;
     return (' ' + haystack + ' ').includes(' ' + phrase + ' ');
   }
 
-  // Does `postcode` appear within `window` tokens of a context word (the first
-  // token of the suburb or a state form)? A lone 4-digit number proves nothing,
-  // so the postcode only counts when it sits next to where it belongs.
+  // A lone 4-digit number proves nothing: the postcode only counts when it
+  // sits within a few tokens of the suburb or a state form.
   function postcodeHasContext(text, postcode, contextPhrases, window = 4) {
     const toks = text.split(' ');
     const anchors = contextPhrases.filter(Boolean).map((p) => p.split(' ')[0]);
@@ -38,31 +33,26 @@ AT.detect = (() => {
     return false;
   }
 
-  // Match one prepared address profile against a page context.
-  //   ctx = { text: normalizedString, fields: [normalizedString, ...] }
-  // Returns { matched, signals } where signals records which parts fired.
+  // ctx = { text: normalizedString, fields: [normalizedString, ...] }
   function matchAddress(profile, ctx) {
     const inText = (p) => containsPhrase(ctx.text, p);
     const inField = (p) => ctx.fields.some((f) => containsPhrase(f, p));
     const anywhere = (p) => inText(p) || inField(p);
 
-    // Fast path: a known whole-string form present verbatim is a definite hit.
-    // This is also how user-flagged variants (which may have no street name,
-    // e.g. a PO box) get recognized.
+    // Whole-string fast path — also how user-flagged variants with no street
+    // name (e.g. a PO box) get recognized.
     const whole = profile.wholeVariants.some(anywhere);
 
-    // Street name is the anchor. Try every abbreviated/expanded form.
     const street = profile.streetCoreForms.some(anywhere);
     if (!whole && !street) return { matched: false };
 
-    // Street number sitting immediately before the street name ("12 smith st").
     const number = !!profile.number &&
       profile.streetCoreForms.some((core) => anywhere(profile.number + ' ' + core));
 
     const suburb = !!profile.suburb && anywhere(profile.suburb);
     const state = profile.stateForms.some(anywhere);
 
-    // Postcode counts only as a discrete form-field value or next to context.
+    // Postcode counts only as a whole form-field value or next to context.
     let postcode = false;
     if (profile.postcode) {
       const asField = ctx.fields.some((f) => f === profile.postcode);
@@ -70,13 +60,11 @@ AT.detect = (() => {
         postcodeHasContext(ctx.text, profile.postcode, [profile.suburb, ...profile.stateForms]);
     }
 
-    // Anchor + at least one confirming signal. With no stored postcode this
-    // degrades naturally to street + number/suburb.
+    // Anchor + at least one confirming signal.
     const matched = whole || (street && (postcode || number || suburb));
     return { matched, signals: { whole, street, number, postcode, suburb, state } };
   }
 
-  // Return the ids of every profile that matches the context.
   function scan(profiles, ctx) {
     return profiles.filter((p) => matchAddress(p, ctx).matched).map((p) => p.id);
   }

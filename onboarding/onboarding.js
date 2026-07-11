@@ -1,14 +1,10 @@
-// onboarding.js — three-way situation branch, then collect address(es) and
-// (for a move) open the move immediately. Writes go straight through
-// AT.storage.update; the background worker reacts via storage.onChanged.
+// Onboarding: situation branch, address entry, optional backup import.
 (() => {
   const { storage, address, constants } = AT;
   const $ = (sel) => document.querySelector(sel);
 
   let situation = null;
   const isMove = () => situation === 'about_to_move' || situation === 'already_moved';
-
-  // ---- form building -------------------------------------------------------
 
   function stateOptions() {
     return ['<option value="">State…</option>']
@@ -52,8 +48,6 @@
     if (!/^\d{4}$/.test(addr.postcode)) return 'Postcode must be 4 digits.';
     return null;
   }
-
-  // ---- step navigation -----------------------------------------------------
 
   function goStep(id) {
     for (const s of ['step1', 'step2', 'done']) $('#' + s).hidden = (s !== id);
@@ -125,6 +119,7 @@
       s.moves = incoming.moves || [];
       s.pages = incoming.pages || {};
       s.settings = { ...storage.defaultSettings(), ...(incoming.settings || {}) };
+      s.ignoreRules = incoming.ignoreRules || [];
     });
 
     $('#done-detail').textContent = 'Your backup has been restored. All your addresses and sites are back.';

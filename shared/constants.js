@@ -1,12 +1,8 @@
-// shared/constants.js — AU-specific reference data for the matcher.
-//
-// Classic script (no ES modules) so the same file loads in content scripts,
-// extension pages, and the service worker. Everything hangs off a single
-// global `AT` namespace.
+// AU reference data. Classic script (no ES modules) so the same file loads in
+// content scripts, extension pages, and the service worker via the AT global.
 globalThis.AT = globalThis.AT || {};
 
 AT.constants = (() => {
-  // Full state/territory name -> canonical code.
   const AU_STATES = {
     'new south wales': 'NSW',
     'victoria': 'VIC',
@@ -18,8 +14,7 @@ AT.constants = (() => {
     'australian capital territory': 'ACT',
   };
 
-  // Street-type abbreviation -> full word. Several abbreviations may share a
-  // full word (e.g. av/ave -> avenue); address.js generates every form.
+  // Abbreviation -> full word; several abbreviations may share one full word.
   const STREET_TYPES = {
     st: 'street',
     rd: 'road',
@@ -42,8 +37,7 @@ AT.constants = (() => {
     cct: 'circuit',
   };
 
-  // Words that precede a street number and should be skipped when finding the
-  // street name anchor: "Unit 3, 12 Smith St", "Level 2, 12 Smith St".
+  // Skipped when finding the street-name anchor: "Unit 3, 12 Smith St".
   const UNIT_WORDS = new Set(['unit', 'apt', 'apartment', 'flat', 'level', 'lvl', 'suite', 'ste']);
 
   const POSTCODE_RE = /^\d{4}$/;

@@ -141,6 +141,35 @@ storage.cancelMove(state2, now + 2);
 ok('cancel reverts to old current', storage.currentAddress(state2).street === '12 Smith St');
 ok('cancel deletes the new address', !storage.addressById(state2, newId));
 
+console.log('\nScan decision (confirm-first detection)');
+{
+  const st = storage.defaultState();
+  storage.setInitialAddress(st, SMITH, 1000);
+  const cur = storage.currentAddress(st);
+  const k = storage.normalizeUrl('https://bank.com.au/profile');
+  ok('new site with match -> prompt', storage.scanDecision(st, k, [cur.id]) === 'prompt');
+  ok('no match on unknown page -> skip', storage.scanDecision(st, k, []) === 'skip');
+  st.settings.confirmDetections = false;
+  ok('confirmation off -> record', storage.scanDecision(st, k, [cur.id]) === 'record');
+  st.settings.confirmDetections = true;
+  storage.recordScan(st, { url: 'https://bank.com.au/profile', title: 'Bank' }, [cur.id], 1000);
+  ok('already-tracked page -> record', storage.scanDecision(st, k, [cur.id]) === 'record');
+  storage.setIgnored(st, k, true);
+  ok('ignored page -> skip', storage.scanDecision(st, k, [cur.id]) === 'skip');
+  storage.addIgnoreRule(st, 'news.com.au', false);
+  ok('rule-excluded page -> skip',
+    storage.scanDecision(st, storage.normalizeUrl('https://news.com.au/story'), [cur.id]) === 'skip');
+  const mv = storage.startMove(st, NEW, 2000);
+  const k2 = storage.normalizeUrl('https://ato.gov.au/details');
+  ok('old address during move -> record (never prompted away)',
+    storage.scanDecision(st, k2, [mv.fromAddressId]) === 'record');
+  ok('new address during move on unknown page -> prompt',
+    storage.scanDecision(st, k2, [mv.toAddressId]) === 'prompt');
+  const ik = storage.ignorePage(st, { url: 'https://maps.google.com/place/1', title: 'Maps' }, 3000);
+  ok('ignorePage creates a flagged entry', !!st.pages[ik] && st.pages[ik].ignored === true);
+  ok('ignorePage key skipped afterwards', storage.scanDecision(st, ik, [mv.toAddressId]) === 'skip');
+}
+
 // ---- update() writes only changed keys (the anti-loop guarantee) ----------
 // content.js must never see a `pages`-only scan as an addresses/moves/settings
 // change, or it would re-scan forever. That holds because update() writes just

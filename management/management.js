@@ -1,7 +1,5 @@
-// management.js — the full UI: Dashboard / Sites / Addresses / Settings, plus
-// the move view folded into the Dashboard. All reads/writes go through
-// AT.storage; every mutation reloads + re-renders. Event handling is delegated,
-// so re-rendering #view never leaves stale listeners behind.
+// Management UI. Every mutation reloads + re-renders; event handling is
+// delegated so re-rendering #view never leaves stale listeners behind.
 (() => {
   const { storage, address, constants } = AT;
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -10,6 +8,7 @@
   let state = storage.defaultState();
   let tab = 'dashboard';
   let sitesQuery = '';
+  let excludeSel = new Set(); // selected rows in the Excludes table ('rule:…' | 'page:…')
 
   const TRASH = `<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0zM14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/></svg>`;
 
@@ -523,7 +522,7 @@
         <section class="help-section" id="help-setup">
           <h2>Getting started</h2>
           <p>Before the extension can detect anything, it needs to know your address. Open the <strong>Addresses</strong> tab and add your current address. That is the only setup required.</p>
-          <p>Once set, the extension scans every page you visit in the background. When it finds your address, that site is added to the Sites tab automatically.</p>
+          <p>Once set, the extension scans every page you visit in the background. When it finds your address on a new site, a small prompt in the top-right corner of the page asks whether to save the site or exclude it. Prefer silence? Turn off "Ask before saving" in Settings and sites are recorded automatically.</p>
           <h3>First time checklist</h3>
           <ol>
             <li>Add your current address in the Addresses tab.</li>
@@ -579,7 +578,7 @@
           <h3>Actions</h3>
           <dl>
             <dt>Note</dt><dd>Add a private note — useful for login hints or special instructions.</dd>
-            <dt>Ignore</dt><dd>Hide this page, its whole domain, or anything starting with a URL prefix you edit. Ignored pages can be restored from Settings; domain and prefix rules are managed there too.</dd>
+            <dt>Ignore</dt><dd>Hide this page, its whole domain, or anything starting with a URL prefix you edit. Everything you exclude is listed under Settings → Excludes, where it can be restored or removed.</dd>
             <dt>Delete</dt><dd>Permanently remove the site and all its history. Cannot be undone.</dd>
           </dl>
         </section>
@@ -590,12 +589,13 @@
           <dl>
             <dt>Scan visible page text</dt><dd>The main detection method. Scans rendered text on every page you visit.</dd>
             <dt>Scan pre-filled form values</dt><dd>Checks input fields for your address. Useful for account settings pages.</dd>
+            <dt>Ask before saving newly detected sites</dt><dd>Shows an on-page prompt when your address is found on a new site, so you decide what gets saved or excluded. Turn off to record sites silently. Pages showing your old address during a move are always saved — that list is the whole point.</dd>
             <dt>Skip footers and headers</dt><dd>Reduces false positives from sites that print your address in every page footer.</dd>
             <dt>Re-scan when the page changes</dt><dd>Watches for DOM changes and re-scans. Enable for single-page apps (SPAs).</dd>
             <dt>Show on-page banner during a move</dt><dd>Shows the update banner when your old address is found. Disable if disruptive.</dd>
           </dl>
-          <h3>Ignore rules</h3>
-          <p>A rule is a domain (<code>google.com</code>) or a URL prefix (<code>google.com/maps</code>). Pages matching a rule are never tracked and never show the banner. Rules are created from the Ignore action on the Sites tab or added directly in Settings, and stay until you remove them.</p>
+          <h3>Excludes</h3>
+          <p>One table of everything the extension skips. <strong>Domain</strong> (<code>google.com</code>) and <strong>Prefix</strong> (<code>google.com/maps</code>) rules stop matching pages from ever being tracked or bannered. A <strong>Page</strong> exclude is a single page you've hidden — Restore brings it back with its history, Remove deletes it. Excludes are created from the Ignore action on the Sites tab or added directly in Settings.</p>
           <h3>Backup and transfer</h3>
           <p><strong>Export</strong> saves your addresses, sites list, and move history as a JSON file. Use this to back up your data or move it to another device.</p>
           <p><strong>Import</strong> loads a previously exported file. You can merge it with existing data or replace everything. The file contains your home address — keep it private.</p>
@@ -635,16 +635,40 @@
     const s = state.settings;
     const toggle = (key, label) =>
       `<label class="toggle"><input type="checkbox" data-setting="${key}"${s[key] ? ' checked' : ''}> ${label}</label>`;
-    const ignored = Object.entries(state.pages).filter(([, p]) => p.ignored);
-    const ignoredList = ignored.length
-      ? ignored.map(([key, p]) => `<li>${esc(pageName(p))} <span class="muted">${esc(p.domain || '')}</span>
-          <button class="link" data-action="restore" data-key="${esc(key)}">Restore</button></li>`).join('')
-      : `<li class="muted">Nothing ignored.</li>`;
-    const rules = state.ignoreRules || [];
-    const rulesList = rules.length
-      ? rules.map((r) => `<li><code>${esc(r)}</code>
-          <button class="link danger" data-action="remove-rule" data-rule="${esc(r)}">Remove</button></li>`).join('')
-      : `<li class="muted">No ignore rules yet.</li>`;
+    // One Excludes table: domain/prefix rules and individually-ignored pages.
+    const TYPE_ORDER = { Domain: 0, Prefix: 1, Page: 2 };
+    const excludes = [
+      ...(state.ignoreRules || []).map((r) => ({
+        type: r.includes('/') ? 'Prefix' : 'Domain', value: r, rule: r, href: 'https://' + r,
+        id: 'rule:' + r,
+      })),
+      ...Object.entries(state.pages)
+        .filter(([, p]) => p.ignored)
+        .map(([key, p]) => ({
+          type: 'Page', value: key, key, href: p.rawUrl || 'https://' + key,
+          id: 'page:' + key,
+        })),
+    ].sort((a, b) => (TYPE_ORDER[a.type] - TYPE_ORDER[b.type]) || a.value.localeCompare(b.value));
+
+    // Drop selections whose row no longer exists.
+    excludeSel = new Set([...excludeSel].filter((id) => excludes.some((x) => x.id === id)));
+    const allChecked = excludes.length > 0 && excludes.every((x) => excludeSel.has(x.id));
+
+    const excludeRows = excludes.length
+      ? excludes.map((x) => `<tr>
+          <td class="col-check"><input type="checkbox" class="exclude-check"
+            data-exid="${esc(x.id)}"${excludeSel.has(x.id) ? ' checked' : ''}></td>
+          <td class="col-type">${x.type}</td>
+          <td class="col-value"><a href="${esc(x.href)}" title="${esc(x.value)}" target="_blank" rel="noopener"><code>${esc(x.value)}</code></a></td>
+          <td class="col-actions"><div class="actions-row">
+            ${x.key
+              ? `<button class="link" data-action="restore" data-key="${esc(x.key)}">Restore</button>
+                 <span class="actions-sep"></span>
+                 <button class="link danger" data-action="remove" data-key="${esc(x.key)}">Remove</button>`
+              : `<button class="link danger" data-action="remove-rule" data-rule="${esc(x.rule)}">Remove</button>`}
+          </div></td>
+        </tr>`).join('')
+      : `<tr><td colspan="4" class="empty-row">Nothing excluded. Use Ignore on the Sites tab, or add a rule.</td></tr>`;
 
     view.innerHTML = `
       <section class="card">
@@ -660,20 +684,36 @@
         <div class="block-title">Detection</div>
         ${toggle('scanVisibleText', 'Scan visible page text')}
         ${toggle('scanFormValues', 'Scan pre-filled form values')}
+        ${toggle('confirmDetections', 'Ask before saving newly detected sites')}
         ${toggle('skipFooterHeader', 'Skip footers and headers')}
         ${toggle('rescanOnDomMutation', 'Re-scan when the page changes (SPA support)')}
         ${toggle('showBanner', 'Show the on-page banner during a move')}
       </section>
       <section class="card">
-        <div class="block-title">Ignore rules</div>
-        <p class="muted small">Pages matching a domain or URL prefix are never tracked or bannered.
-          Removing a rule does not restore sites it already hid — use Ignored sites below.</p>
-        <ul class="rules">${rulesList}</ul>
-        <button class="link" data-action="add-rule">+ Add rule</button>
-      </section>
-      <section class="card">
-        <div class="block-title">Ignored sites</div>
-        <ul class="recent">${ignoredList}</ul>
+        <div class="block-head">
+          <div class="block-title">Excludes</div>
+          <div class="block-head-btns">
+            ${excludeSel.size
+              ? `<button class="secondary danger" data-action="delete-selected">Delete All Selected (${excludeSel.size})</button>`
+              : ''}
+            <button class="secondary" data-action="add-rule">+ Add rule</button>
+          </div>
+        </div>
+        <p class="muted small">Domain and Prefix rules stop matching pages from ever being tracked.
+          A Page exclude keeps its history: Restore puts it back in your lists,
+          Remove deletes it (a detected page returns on your next visit).</p>
+        <div class="table-wrap">
+          <table class="sites-table">
+            <thead><tr>
+              <th class="col-check">${excludes.length
+                ? `<input type="checkbox" id="exclude-check-all"${allChecked ? ' checked' : ''}>` : ''}</th>
+              <th class="col-type">Type</th>
+              <th>Value</th>
+              <th class="col-actions-head">Actions</th>
+            </tr></thead>
+            <tbody>${excludeRows}</tbody>
+          </table>
+        </div>
       </section>`;
   }
 
@@ -798,10 +838,30 @@
       }
       case 'restore': await commit((s) => storage.setIgnored(s, key, false)); break;
       case 'remove-rule': await commit((s) => storage.removeIgnoreRule(s, t.dataset.rule)); break;
+      case 'delete-selected': {
+        const n = excludeSel.size;
+        if (!n) break;
+        const { confirmed } = await openModal({
+          title: 'Delete selected excludes',
+          message: `${n} selected exclude${n === 1 ? '' : 's'} will be deleted. Rules stop applying; pages are removed with their history.`,
+          okLabel: 'Delete',
+          danger: true,
+        });
+        if (!confirmed) break;
+        const ids = [...excludeSel];
+        excludeSel.clear();
+        await commit((s) => {
+          for (const id of ids) {
+            if (id.startsWith('rule:')) storage.removeIgnoreRule(s, id.slice(5));
+            else storage.removePage(s, id.slice(5));
+          }
+        });
+        break;
+      }
       case 'add-rule': {
         const { confirmed, values } = await openModal({
-          title: 'Add ignore rule',
-          message: 'A domain or URL prefix. Matching pages are never tracked; existing matches move to Ignored sites.',
+          title: 'Add exclude rule',
+          message: 'A domain or URL prefix. Matching pages are never tracked; already-saved matches become Page excludes.',
           fields: [{ key: 'rule', label: '', placeholder: 'google.com/maps', required: true }],
           okLabel: 'Add',
         });
@@ -897,6 +957,17 @@
     if (e.target.dataset.setting) {
       const key = e.target.dataset.setting, val = e.target.checked;
       await commit((s) => { s.settings[key] = val; });
+    } else if (e.target.classList.contains('exclude-check')) {
+      if (e.target.checked) excludeSel.add(e.target.dataset.exid);
+      else excludeSel.delete(e.target.dataset.exid);
+      render();
+    } else if (e.target.id === 'exclude-check-all') {
+      if (e.target.checked) {
+        document.querySelectorAll('.exclude-check').forEach((cb) => excludeSel.add(cb.dataset.exid));
+      } else {
+        excludeSel.clear();
+      }
+      render();
     } else if (e.target.id === 'import-file' && e.target.files[0]) {
       await importData(e.target.files[0]);
       e.target.value = '';

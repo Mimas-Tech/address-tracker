@@ -5,7 +5,7 @@ body { margin: 0; background: var(--bg); color: var(--ink);
 .topbar { display: flex; align-items: center; gap: 24px; background: var(--card);
   border-bottom: 1px solid var(--line); padding: 0 24px; position: sticky; top: 0; z-index: 10; }
 .brand { font-weight: 600; padding: 16px 0; display: flex; align-items: center; gap: 8px; }
-.brand img { border-radius: 5px; }
+.brand img { border-radius: 3px; }
 .tabs { display: flex; gap: 4px; }
 .tab { background: none; border: 0; border-bottom: 2px solid transparent;
   padding: 16px 12px; font: inherit; color: var(--muted); cursor: pointer; }
@@ -20,7 +20,7 @@ body { margin: 0; background: var(--bg); color: var(--ink);
   display: flex; flex-direction: column; gap: 16px; }
 
 .card { background: var(--card); border: 1px solid var(--line);
-  border-radius: 12px; padding: 18px 20px; }
+  border-radius: 3px; padding: 18px 20px; }
 .card.empty { color: var(--muted); text-align: center; }
 
 /* Sites card: no padding so the table sits flush */
@@ -28,12 +28,18 @@ body { margin: 0; background: var(--bg); color: var(--ink);
 
 .block-title { font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
   color: var(--muted); margin-bottom: 8px; }
+.block-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.block-head .block-title { margin-bottom: 0; }
+.block-head-btns { display: flex; gap: 8px; }
+.block-head button { font-size: 13px; }
+button.secondary.danger { color: var(--red); border-color: color-mix(in srgb, var(--red) 45%, transparent); }
+button.secondary.danger:hover { background: color-mix(in srgb, var(--red) 10%, transparent); }
 .addr-line { font-size: 16px; }
 .stat-row { font-size: 15px; margin-bottom: 14px; }
 .small { font-size: 12px; }
 .muted { color: var(--muted); }
 
-.bar { height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; margin: 10px 0 4px; }
+.bar { height: 10px; background: var(--line); border-radius: 3px; overflow: hidden; margin: 10px 0 4px; }
 .bar span { display: block; height: 100%; background: var(--brand); }
 .bar-label { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
 
@@ -49,7 +55,7 @@ body { margin: 0; background: var(--bg); color: var(--ink);
 
 .toolbar { display: flex; gap: 8px; margin-bottom: 14px; }
 
-.group { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; padding: 4px 12px; }
+.group { border: 1px solid var(--line); border-radius: 3px; margin-bottom: 10px; padding: 4px 12px; }
 .group summary { cursor: pointer; padding: 8px 0; font-weight: 500; }
 .site-row { padding: 10px 0; border-top: 1px solid var(--line); }
 
@@ -67,7 +73,7 @@ body { margin: 0; background: var(--bg); color: var(--ink);
   padding: 8px 12px;
   background: var(--surface2);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 3px;
   color: var(--ink);
   outline: none;
 }
@@ -114,7 +120,7 @@ body { margin: 0; background: var(--bg); color: var(--ink);
   font-size: 11px;
   font-weight: 500;
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: 3px;
   background: var(--surface2);
   border: 1px solid var(--line);
   color: var(--muted);
@@ -131,7 +137,7 @@ a.domain-pill:hover { border-color: var(--brand); color: var(--ink); }
   display: inline-block;
   font-size: 11px;
   padding: 2px 7px;
-  border-radius: 6px;
+  border-radius: 3px;
   background: var(--surface2);
   border: 1px solid var(--line);
   margin: 2px 2px 2px 0;
@@ -149,7 +155,7 @@ button.link.muted:hover { color: var(--ink); }
 .empty-row { text-align: center; color: var(--muted); padding: 32px !important; }
 
 /* ---- Badges -------------------------------------------------------------- */
-.badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; vertical-align: middle; white-space: nowrap; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 3px; vertical-align: middle; white-space: nowrap; }
 .badge.needs_update { background: color-mix(in srgb, var(--red) 15%, transparent); color: var(--red); border: 1px solid color-mix(in srgb, var(--red) 30%, transparent); }
 .badge.done { background: color-mix(in srgb, var(--green) 15%, transparent); color: var(--green); border: 1px solid color-mix(in srgb, var(--green) 30%, transparent); }
 .badge.up_to_date { background: var(--surface2); color: var(--muted); border: 1px solid var(--line); }
@@ -157,7 +163,7 @@ button.link.muted:hover { color: var(--ink); }
 /* ---- Address cards ------------------------------------------------------- */
 .addr-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
 .variants li { padding: 5px 0; }
-.variants code { background: var(--surface2); padding: 2px 6px; border-radius: 5px; }
+.variants code { background: var(--surface2); padding: 2px 6px; border-radius: 3px; }
 
 /* ---- Toggles + forms ----------------------------------------------------- */
 .toggle { display: block; margin: 10px 0; cursor: pointer; }
@@ -170,16 +176,16 @@ dialog [hidden] { display: none !important; }
 
 /* Segmented scope selector (ignore dialog) */
 .seg { display: flex; gap: 3px; padding: 3px; margin-top: 4px;
-  background: var(--surface2); border: 1px solid var(--line); border-radius: 10px; }
-.seg-btn { flex: 1; font: inherit; font-size: 13px; padding: 7px 6px;
-  border: 0; border-radius: 7px; background: transparent; color: var(--muted);
+  background: var(--surface2); border: 1px solid var(--line); border-radius: 3px; }
+.seg-btn { flex: 1; font: inherit; font-size: 13px; padding: 5px 10px;
+  border: 0; border-radius: 3px; background: transparent; color: var(--muted);
   cursor: pointer; white-space: nowrap;
   transition: background .18s ease, color .18s ease; }
 .seg-btn:hover { color: var(--ink); }
 .seg-btn.active { background: var(--brand); color: var(--on-brand); }
 
 .ignore-preview { margin-top: 12px; padding: 10px 12px;
-  background: var(--surface2); border: 1px solid var(--line); border-radius: 8px; }
+  background: var(--surface2); border: 1px solid var(--line); border-radius: 3px; }
 .ignore-preview .ignore-hint { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
 .ignore-preview code { font-size: 13px; color: var(--ink); word-break: break-all; }
 .ignore-preview.pop { animation: preview-in .25s ease; }
@@ -187,12 +193,16 @@ dialog [hidden] { display: none !important; }
   from { opacity: 0; transform: translateY(-5px); }
   to   { opacity: 1; transform: none; }
 }
-.rules li { padding: 5px 0; }
-.rules code { background: var(--surface2); padding: 2px 6px; border-radius: 5px; }
+.col-check { width: 34px; text-align: center; }
+.col-check input { accent-color: var(--brand); cursor: pointer; margin: 0; vertical-align: middle; }
+.col-type { width: 90px; }
+.col-value { max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-value a { color: var(--ink); text-decoration: none; }
+.col-value a:hover { color: var(--brand); text-decoration: underline; }
 
 /* ---- Buttons ------------------------------------------------------------- */
 button.primary, button.secondary, label.file-btn {
-  font: inherit; border-radius: 8px; padding: 9px 16px; cursor: pointer; border: 1px solid transparent;
+  font: inherit; border-radius: 3px; padding: 5px 10px; cursor: pointer; border: 1px solid transparent;
   display: inline-block; }
 button.primary { background: var(--brand); color: var(--on-brand); }
 button.primary:hover { filter: brightness(1.08); }
@@ -211,7 +221,7 @@ a.link:hover, .li-sub a:hover { text-decoration: underline; }
 .error { color: var(--red); font-size: 13px; }
 
 /* ---- Dialog -------------------------------------------------------------- */
-dialog { border: 0; border-radius: 14px; padding: 22px 24px; max-width: 420px; width: 92%;
+dialog { border: 0; border-radius: 3px; padding: 22px 24px; max-width: 420px; width: 92%;
   background: var(--card); color: var(--ink);
   box-shadow: 0 10px 40px rgba(0,0,0,.65); }
 dialog::backdrop { background: rgba(0,0,0,.55); }
@@ -222,7 +232,7 @@ dialog .row label { flex: 1; }
 dialog input, dialog select {
   display: block; width: 100%; margin-top: 4px; padding: 8px 10px;
   font: inherit; background: var(--surface2); color: var(--ink);
-  border: 1px solid var(--line); border-radius: 8px; outline: none; }
+  border: 1px solid var(--line); border-radius: 3px; outline: none; }
 dialog input:focus, dialog select:focus { border-color: var(--brand); }
 dialog menu { display: flex; justify-content: flex-end; gap: 10px; margin: 18px 0 0; padding: 0; }
 option { background: var(--card); color: var(--ink); }
@@ -231,7 +241,7 @@ option { background: var(--card); color: var(--ink); }
 button.primary.danger { background: var(--red); color: var(--on-red); }
 
 /* ---- Icon button --------------------------------------------------------- */
-.icon-btn { background: none; border: 0; padding: 4px; cursor: pointer; border-radius: 5px;
+.icon-btn { background: none; border: 0; padding: 5px 10px; cursor: pointer; border-radius: 3px;
   display: inline-flex; align-items: center; color: var(--muted); vertical-align: middle; }
 .icon-btn:hover { background: var(--surface2); color: var(--ink); }
 .icon-btn.danger { color: var(--red); opacity: .6; }
@@ -248,7 +258,7 @@ button.primary.danger { background: var(--red); color: var(--on-red); }
 .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 1000;
   display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
 .toast { background: var(--card); border: 1px solid var(--line);
-  border-left: 3px solid var(--green); border-radius: 10px; padding: 12px 16px;
+  border-left: 3px solid var(--green); border-radius: 3px; padding: 12px 16px;
   box-shadow: 0 4px 24px rgba(0,0,0,.45); pointer-events: all; max-width: 320px;
   animation: toast-in .18s ease; }
 .toast-title { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
@@ -263,7 +273,7 @@ button.primary.danger { background: var(--red); color: var(--on-red); }
   display: flex; flex-direction: column; gap: 2px;
 }
 .help-nav-side a {
-  display: block; padding: 7px 10px; border-radius: 8px;
+  display: block; padding: 7px 10px; border-radius: 3px;
   font-size: 13px; color: var(--muted); text-decoration: none;
 }
 .help-nav-side a:hover { background: var(--surface2); color: var(--ink); }
@@ -290,7 +300,7 @@ button.primary.danger { background: var(--red); color: var(--on-red); }
   color: var(--muted); border-left: 2px solid var(--line);
 }
 .help-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px;
-  background: var(--surface2); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  background: var(--surface2); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
 .help-table th {
   text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase;
   letter-spacing: .04em; color: var(--muted); padding: 8px 12px;

@@ -1,17 +1,10 @@
-// background.js — MV3 service worker (classic, so importScripts works).
-//
-// The single writer. Content scripts and UI pages send messages or write their
-// own address/move records; this worker serializes every storage mutation it
-// performs, owns the right-click "this is my address" menu, and keeps the
-// toolbar badge in sync. It holds no in-memory state — everything rehydrates
-// from chrome.storage on wake.
+// MV3 service worker: handles messages, context menus and the badge.
+// No in-memory state — the worker is killed when idle and rehydrates from storage.
 importScripts('shared/constants.js', 'shared/detect.js', 'shared/address.js', 'shared/storage.js');
 
 const { storage, address } = AT;
 
-// ---- serialized writes -----------------------------------------------------
-// Messages can arrive concurrently; each storage.update is load->mutate->save,
-// so we chain them to prevent lost updates.
+// update() is load->mutate->save; concurrent messages must be chained or writes get lost.
 let writeChain = Promise.resolve();
 function mutate(fn) {
   const next = writeChain.then(() => storage.update(fn));
@@ -19,39 +12,44 @@ function mutate(fn) {
   return next;
 }
 
-// ---- messages from content script & UI -------------------------------------
-
-chrome.runtime.onMessage.addListener((msg, sender) => {
-  handleMessage(msg, sender); // fire-and-forget; senders don't await a reply
-  return false;
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  handleMessage(msg).then(sendResponse, () => sendResponse({}));
+  return true; // keep the channel open for the async reply
 });
 
 async function handleMessage(msg) {
   const now = Date.now();
+  const pageInfo = { url: msg.url, rawUrl: msg.url, title: msg.title };
+  let reply = {};
   switch (msg.type) {
-    case 'scan':
-      await mutate((s) => storage.recordScan(
-        s, { url: msg.url, rawUrl: msg.url, title: msg.title }, msg.matchedIds, now
-      ));
+    case 'scan': {
+      // New sites are confirmed on-page unless confirmation is off or it's the move's old address.
+      const state = await storage.load();
+      const decision = storage.scanDecision(state, storage.normalizeUrl(msg.url), msg.matchedIds);
+      if (decision === 'record') {
+        await mutate((s) => storage.recordScan(s, pageInfo, msg.matchedIds, now));
+      }
+      reply = { prompt: decision === 'prompt' };
+      break;
+    }
+    case 'save-page': // user confirmed the toast
+      await mutate((s) => storage.recordScan(s, pageInfo, msg.matchedIds || [], now));
       break;
     case 'override':
       await mutate((s) => storage.setOverride(s, storage.normalizeUrl(msg.url), msg.status, now));
       break;
     case 'ignore':
-      await mutate((s) => storage.setIgnored(s, storage.normalizeUrl(msg.url), true));
+      await mutate((s) => storage.ignorePage(s, pageInfo, now));
+      break;
+    case 'ignore-rule':
+      await mutate((s) => storage.addIgnoreRule(s, msg.rule, true));
       break;
     default:
-      return;
+      return reply;
   }
   await refreshBadge();
+  return reply;
 }
-
-// ---- right-click context menu ----------------------------------------------
-// Two actions when text is selected:
-//   "Add as variant"  — saves the selection as a known form of the current address
-//                       AND records this page as holding that address.
-//   "Add page only"   — records this page under the current address without a variant.
-// The "page only" action also appears when no text is selected.
 
 async function buildMenus() {
   await chrome.contextMenus.removeAll();
@@ -65,7 +63,6 @@ async function buildMenus() {
     contexts: ['all'],
   });
 
-  // Known forms of the address the user can confirm a match against
   const known = [address.format(current), ...(current.flaggedVariants || [])];
   for (let i = 0; i < known.length; i++) {
     chrome.contextMenus.create({
@@ -78,7 +75,6 @@ async function buildMenus() {
 
   chrome.contextMenus.create({ id: 'at-sep1', parentId: 'at-parent', type: 'separator', contexts: ['selection'] });
 
-  // Add the selected text as a new (unconfirmed) variant — opens management page modal
   chrome.contextMenus.create({
     id: 'at-variant-new',
     parentId: 'at-parent',
@@ -106,11 +102,11 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const pageInfo = { url: info.pageUrl, rawUrl: info.pageUrl, title: tab?.title || '' };
 
   if (info.menuItemId.startsWith('at-match:')) {
-    // User confirmed the selected text matches an existing known form — just record the page
+    // Selection matches a known form — record the page.
     await mutate((s) => storage.recordScan(s, pageInfo, [current.id], now));
     await refreshBadge();
   } else if (info.menuItemId === 'at-variant-new') {
-    // Open management page so the user can confirm/edit before saving
+    // Management page opens so the user can review the variant before saving.
     const text = (info.selectionText || '').trim();
     if (!text) return;
     const url = chrome.runtime.getURL('management/management.html') +
@@ -122,9 +118,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 });
 
-// ---- toolbar badge ---------------------------------------------------------
-// During a move, show the count of pages still needing an update.
-
+// Badge: count of pages still needing an update during a move.
 async function refreshBadge() {
   const state = await storage.load();
   const prog = storage.progress(state);
@@ -135,8 +129,6 @@ async function refreshBadge() {
     await chrome.action.setBadgeText({ text: '' });
   }
 }
-
-// ---- lifecycle -------------------------------------------------------------
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   await buildMenus();
@@ -151,8 +143,7 @@ chrome.runtime.onStartup.addListener(async () => {
   await refreshBadge();
 });
 
-// React to writes made by UI pages (e.g. Start Move from the popup), which this
-// worker didn't perform itself. refreshBadge only reads, so there's no loop.
+// React to writes made directly by UI pages. refreshBadge only reads, so no loop.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   if (changes.addresses) buildMenus();
