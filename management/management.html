@@ -53,6 +53,31 @@
     </form>
   </dialog>
 
+  <!-- Ignore with scope: this page / whole domain / starts-with prefix -->
+  <dialog id="ignore-dialog">
+    <form method="dialog">
+      <h3>Ignore</h3>
+      <div class="seg" role="tablist">
+        <button type="button" class="seg-btn active" data-scope="page">This page</button>
+        <button type="button" class="seg-btn" data-scope="domain">Whole domain</button>
+        <button type="button" class="seg-btn" data-scope="prefix">Starts with…</button>
+      </div>
+      <input id="ignore-prefix" type="text" autocomplete="off" spellcheck="false" hidden>
+      <div class="ignore-preview" id="ignore-preview">
+        <div class="ignore-hint" id="ignore-hint"></div>
+        <code id="ignore-preview-text"></code>
+      </div>
+      <label class="toggle" id="ignore-apply-wrap" hidden>
+        <input type="checkbox" id="ignore-apply" checked> <span id="ignore-apply-label">Also hide matching saved sites</span>
+      </label>
+      <p class="error" id="ignore-error" hidden></p>
+      <menu>
+        <button value="cancel" class="secondary" type="button" id="ignore-cancel">Cancel</button>
+        <button id="ignore-save" class="primary" type="button">Ignore</button>
+      </menu>
+    </form>
+  </dialog>
+
   <div id="toast-container" class="toast-container"></div>
 
   <script src="../shared/constants.js"></script>

@@ -160,6 +160,93 @@
   });
   dlg.addEventListener('close', () => { if (dlgResolve) { dlgResolve(null); dlgResolve = null; } });
 
+  // ---- ignore dialog (scope: page / domain / starts-with) -------------------
+
+  const ignoreDlg = $('#ignore-dialog');
+  let ignoreResolve = null;
+  let ignoreKey = '';
+
+  const ignoreScope = () => ignoreDlg.querySelector('.seg-btn.active').dataset.scope;
+
+  function ignoreRuleFor(scope) {
+    if (scope === 'domain') return storage.domainOf(ignoreKey);
+    if (scope === 'prefix') return storage.normalizeRule($('#ignore-prefix').value);
+    return ignoreKey;
+  }
+
+  const IGNORE_HINTS = {
+    page: 'Only this exact page is ignored',
+    domain: 'Everything on this domain is ignored',
+    prefix: 'Every URL starting with this is ignored',
+  };
+
+  function refreshIgnoreDialog(animate) {
+    const scope = ignoreScope();
+    const rule = ignoreRuleFor(scope);
+    $('#ignore-prefix').hidden = scope !== 'prefix';
+    $('#ignore-hint').textContent = IGNORE_HINTS[scope];
+    $('#ignore-preview-text').textContent =
+      scope === 'prefix' ? (rule ? rule + '…' : '—') : rule;
+    $('#ignore-error').hidden = true;
+
+    const applyWrap = $('#ignore-apply-wrap');
+    if (scope === 'page') {
+      applyWrap.hidden = true;
+    } else {
+      const count = rule
+        ? Object.entries(state.pages).filter(([k, p]) =>
+            isWeb(p) && !p.ignored && storage.ruleMatches(rule, k)).length
+        : 0;
+      applyWrap.hidden = false;
+      $('#ignore-apply-label').textContent = `Also hide ${count} matching saved site${count === 1 ? '' : 's'}`;
+    }
+
+    if (animate) {
+      const pv = $('#ignore-preview');
+      pv.classList.remove('pop');
+      void pv.offsetWidth; // restart the animation
+      pv.classList.add('pop');
+    }
+  }
+
+  // Resolves to { scope, rule, apply } or null on cancel.
+  function openIgnoreDialog(key) {
+    ignoreKey = key;
+    ignoreDlg.querySelectorAll('.seg-btn').forEach((b) =>
+      b.classList.toggle('active', b.dataset.scope === 'page'));
+    $('#ignore-prefix').value = key;
+    $('#ignore-apply').checked = true;
+    refreshIgnoreDialog(true);
+    return new Promise((resolve) => { ignoreResolve = resolve; ignoreDlg.showModal(); });
+  }
+
+  ignoreDlg.addEventListener('click', (e) => {
+    const btn = e.target.closest('.seg-btn');
+    if (!btn || btn.classList.contains('active')) return;
+    ignoreDlg.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b === btn));
+    refreshIgnoreDialog(true);
+    if (btn.dataset.scope === 'prefix') $('#ignore-prefix').focus();
+  });
+  $('#ignore-prefix').addEventListener('input', () => refreshIgnoreDialog(false));
+
+  $('#ignore-save').addEventListener('click', () => {
+    const scope = ignoreScope();
+    const rule = ignoreRuleFor(scope);
+    if (scope !== 'page' && !rule) {
+      const el = $('#ignore-error');
+      el.textContent = 'Enter a domain or URL prefix.';
+      el.hidden = false;
+      return;
+    }
+    const resolve = ignoreResolve; ignoreResolve = null;
+    ignoreDlg.close();
+    resolve({ scope, rule, apply: $('#ignore-apply').checked });
+  });
+  $('#ignore-cancel').addEventListener('click', () => ignoreDlg.close());
+  ignoreDlg.addEventListener('close', () => {
+    if (ignoreResolve) { const r = ignoreResolve; ignoreResolve = null; r(null); }
+  });
+
   // ---- render: dispatch ----------------------------------------------------
 
   function render() {
@@ -492,7 +579,7 @@
           <h3>Actions</h3>
           <dl>
             <dt>Note</dt><dd>Add a private note — useful for login hints or special instructions.</dd>
-            <dt>Ignore</dt><dd>Hide this site from the list. Restorable from Settings.</dd>
+            <dt>Ignore</dt><dd>Hide this page, its whole domain, or anything starting with a URL prefix you edit. Ignored pages can be restored from Settings; domain and prefix rules are managed there too.</dd>
             <dt>Delete</dt><dd>Permanently remove the site and all its history. Cannot be undone.</dd>
           </dl>
         </section>
@@ -507,6 +594,8 @@
             <dt>Re-scan when the page changes</dt><dd>Watches for DOM changes and re-scans. Enable for single-page apps (SPAs).</dd>
             <dt>Show on-page banner during a move</dt><dd>Shows the update banner when your old address is found. Disable if disruptive.</dd>
           </dl>
+          <h3>Ignore rules</h3>
+          <p>A rule is a domain (<code>google.com</code>) or a URL prefix (<code>google.com/maps</code>). Pages matching a rule are never tracked and never show the banner. Rules are created from the Ignore action on the Sites tab or added directly in Settings, and stay until you remove them.</p>
           <h3>Backup and transfer</h3>
           <p><strong>Export</strong> saves your addresses, sites list, and move history as a JSON file. Use this to back up your data or move it to another device.</p>
           <p><strong>Import</strong> loads a previously exported file. You can merge it with existing data or replace everything. The file contains your home address — keep it private.</p>
@@ -551,6 +640,11 @@
       ? ignored.map(([key, p]) => `<li>${esc(pageName(p))} <span class="muted">${esc(p.domain || '')}</span>
           <button class="link" data-action="restore" data-key="${esc(key)}">Restore</button></li>`).join('')
       : `<li class="muted">Nothing ignored.</li>`;
+    const rules = state.ignoreRules || [];
+    const rulesList = rules.length
+      ? rules.map((r) => `<li><code>${esc(r)}</code>
+          <button class="link danger" data-action="remove-rule" data-rule="${esc(r)}">Remove</button></li>`).join('')
+      : `<li class="muted">No ignore rules yet.</li>`;
 
     view.innerHTML = `
       <section class="card">
@@ -569,6 +663,13 @@
         ${toggle('skipFooterHeader', 'Skip footers and headers')}
         ${toggle('rescanOnDomMutation', 'Re-scan when the page changes (SPA support)')}
         ${toggle('showBanner', 'Show the on-page banner during a move')}
+      </section>
+      <section class="card">
+        <div class="block-title">Ignore rules</div>
+        <p class="muted small">Pages matching a domain or URL prefix are never tracked or bannered.
+          Removing a rule does not restore sites it already hid — use Ignored sites below.</p>
+        <ul class="rules">${rulesList}</ul>
+        <button class="link" data-action="add-rule">+ Add rule</button>
       </section>
       <section class="card">
         <div class="block-title">Ignored sites</div>
@@ -597,6 +698,7 @@
     const data = {
       schemaVersion: state.schemaVersion, addresses: state.addresses,
       moves: state.moves, pages: state.pages, settings: state.settings,
+      ignoreRules: state.ignoreRules || [],
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
@@ -632,11 +734,13 @@
         s.moves = incoming.moves || [];
         s.pages = incoming.pages || {};
         s.settings = { ...storage.defaultSettings(), ...(incoming.settings || {}) };
+        s.ignoreRules = incoming.ignoreRules || [];
       } else {
         mergeById(s.addresses, incoming.addresses);
         mergeById(s.moves, incoming.moves);
         Object.assign(s.pages, incoming.pages || {});
         Object.assign(s.settings, incoming.settings || {});
+        s.ignoreRules = [...new Set([...(s.ignoreRules || []), ...(incoming.ignoreRules || [])])];
       }
     });
   }
@@ -684,15 +788,26 @@
       case 'mark-done': await commit((s) => storage.setOverride(s, key, 'done', now)); break;
       case 'mark-needs': await commit((s) => storage.setOverride(s, key, 'needs_update', now)); break;
       case 'ignore': {
-        const { confirmed } = await openModal({
-          title: 'Ignore site',
-          message: 'This site will be hidden from the list. You can restore it any time from Settings.',
-          okLabel: 'Ignore',
+        const res = await openIgnoreDialog(key);
+        if (!res) break;
+        await commit((s) => {
+          if (res.scope === 'page') storage.setIgnored(s, key, true);
+          else storage.addIgnoreRule(s, res.rule, res.apply);
         });
-        if (confirmed) await commit((s) => storage.setIgnored(s, key, true));
         break;
       }
       case 'restore': await commit((s) => storage.setIgnored(s, key, false)); break;
+      case 'remove-rule': await commit((s) => storage.removeIgnoreRule(s, t.dataset.rule)); break;
+      case 'add-rule': {
+        const { confirmed, values } = await openModal({
+          title: 'Add ignore rule',
+          message: 'A domain or URL prefix. Matching pages are never tracked; existing matches move to Ignored sites.',
+          fields: [{ key: 'rule', label: '', placeholder: 'google.com/maps', required: true }],
+          okLabel: 'Add',
+        });
+        if (confirmed && values.rule) await commit((s) => storage.addIgnoreRule(s, values.rule, true));
+        break;
+      }
       case 'remove': {
         const { confirmed } = await openModal({
           title: 'Delete site',

@@ -17,6 +17,7 @@
 
   let settings = AT.storage.defaultSettings();
   let profiles = [];            // address profiles we're hunting right now
+  let ignoreRules = [];         // normalized-URL prefixes we never scan
   let move = null;              // { fromId, toId, newAddressText } while moving
   let bannerDismissed = false;  // reset on navigation
   let lastUrl = location.href;
@@ -27,6 +28,7 @@
     if (!contextAlive()) return;
     const state = await AT.storage.load();
     settings = state.settings;
+    ignoreRules = state.ignoreRules || [];
     const active = AT.storage.activeMove(state);
     if (active) {
       const to = AT.storage.addressById(state, active.toAddressId);
@@ -102,6 +104,14 @@
 
   function scan() {
     if (!contextAlive() || !profiles.length || !document.body) return;
+
+    // Rule-ignored URLs are never scanned or bannered (checked per scan, since
+    // SPA navigation changes the URL without reloading us).
+    const key = AT.storage.normalizeUrl(location.href);
+    if (ignoreRules.some((r) => AT.storage.ruleMatches(r, key))) {
+      removeBanner();
+      return;
+    }
 
     const acc = { text: [], fields: [] };
     if (settings.scanVisibleText) walk(document.body, acc);
@@ -240,7 +250,7 @@
     chrome.storage.onChanged.addListener(async (changes, area) => {
       try {
         if (area !== 'local') return;
-        if (!changes.addresses && !changes.moves && !changes.settings) return;
+        if (!changes.addresses && !changes.moves && !changes.settings && !changes.ignoreRules) return;
         await loadConfig();
         scan();
       } catch { /* extension reloaded — context no longer valid */ }

@@ -163,6 +163,32 @@ button.link.muted:hover { color: var(--ink); }
 .toggle { display: block; margin: 10px 0; cursor: pointer; }
 .toggle input { margin-right: 8px; accent-color: var(--brand); }
 .file-btn input { display: none; }
+dialog label.toggle input {
+  display: inline-block; width: auto; margin: 0 8px 0 0; accent-color: var(--brand); }
+dialog label.toggle { color: var(--ink); font-size: 13px; }
+dialog [hidden] { display: none !important; }
+
+/* Segmented scope selector (ignore dialog) */
+.seg { display: flex; gap: 3px; padding: 3px; margin-top: 4px;
+  background: var(--surface2); border: 1px solid var(--line); border-radius: 10px; }
+.seg-btn { flex: 1; font: inherit; font-size: 13px; padding: 7px 6px;
+  border: 0; border-radius: 7px; background: transparent; color: var(--muted);
+  cursor: pointer; white-space: nowrap;
+  transition: background .18s ease, color .18s ease; }
+.seg-btn:hover { color: var(--ink); }
+.seg-btn.active { background: var(--brand); color: var(--on-brand); }
+
+.ignore-preview { margin-top: 12px; padding: 10px 12px;
+  background: var(--surface2); border: 1px solid var(--line); border-radius: 8px; }
+.ignore-preview .ignore-hint { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.ignore-preview code { font-size: 13px; color: var(--ink); word-break: break-all; }
+.ignore-preview.pop { animation: preview-in .25s ease; }
+@keyframes preview-in {
+  from { opacity: 0; transform: translateY(-5px); }
+  to   { opacity: 1; transform: none; }
+}
+.rules li { padding: 5px 0; }
+.rules code { background: var(--surface2); padding: 2px 6px; border-radius: 5px; }
 
 /* ---- Buttons ------------------------------------------------------------- */
 button.primary, button.secondary, label.file-btn {

@@ -63,8 +63,35 @@ ok('street core has both type forms', profile.streetCoreForms.includes('smith st
 console.log('\nURL normalization');
 const n = storage.normalizeUrl;
 ok('strips www, trailing slash, fragment', n('https://www.ato.gov.au/your-details/#tab') === 'ato.gov.au/your-details');
-ok('drops volatile params, keeps real ones', n('https://x.com/a?utm_source=g&account=2') === 'x.com/a?account=2');
-ok('sorts params for stability', n('https://x.com/a?b=2&a=1') === n('https://x.com/a?a=1&b=2'));
+ok('drops all query params', n('https://x.com/a?utm_source=g&account=2') === 'x.com/a');
+ok('same page regardless of params', n('https://x.com/a?b=2') === n('https://x.com/a?session=xyz'));
+
+console.log('\nIgnore rules');
+const r = storage.normalizeRule;
+ok('rule strips scheme, www, trailing slash', r('https://www.Google.com/Maps/') === 'google.com/maps');
+ok('domain rule matches its pages', storage.ruleMatches('google.com', 'google.com/maps/place'));
+ok('domain rule matches bare domain', storage.ruleMatches('google.com', 'google.com'));
+ok('domain rule does not swallow longer TLD', !storage.ruleMatches('google.com', 'google.com.au/maps'));
+ok('prefix rule matches startswith', storage.ruleMatches('google.com/map', 'google.com/maps/place'));
+ok('prefix rule rejects other paths', !storage.ruleMatches('google.com/map', 'google.com/search'));
+ok('rule matching is case-insensitive on key', storage.ruleMatches('x.com/profile', 'x.com/Profile'));
+
+{
+  const st = storage.defaultState();
+  storage.setInitialAddress(st, SMITH, 1000);
+  const cur2 = storage.currentAddress(st);
+  storage.recordScan(st, { url: 'https://google.com/maps/place/x', title: 'Maps' }, [cur2.id], 1000);
+  storage.recordScan(st, { url: 'https://news.com.au/story', title: 'News' }, [cur2.id], 1000);
+  storage.addIgnoreRule(st, 'google.com/maps', true);
+  ok('applyToExisting flags matching pages', st.pages['google.com/maps/place/x'].ignored === true);
+  ok('non-matching pages untouched', st.pages['news.com.au/story'].ignored === false);
+  const res = storage.recordScan(st, { url: 'https://google.com/maps/place/y', title: 'Maps' }, [cur2.id], 2000);
+  ok('rule-ignored scan records nothing', res === null && !st.pages['google.com/maps/place/y']);
+  ok('rule is ignored for matching key', storage.isRuleIgnored(st, 'google.com/maps/anything'));
+  storage.removeIgnoreRule(st, 'google.com/maps');
+  ok('rule removed', !storage.isRuleIgnored(st, 'google.com/maps/anything'));
+  ok('removing rule does not un-hide pages', st.pages['google.com/maps/place/x'].ignored === true);
+}
 
 console.log('\nMove lifecycle');
 const now = 1000;

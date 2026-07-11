@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Address Tracker",
   "version": "1.0.0",
-  "description": "Quietly tracks every site that has your address, so when you move you have a ready checklist of places to update. All data stays on your device.",
+  "description": "Quietly tracks every site that shows your address, so moving day comes with a ready checklist. All data stays on your device.",
   "permissions": ["storage", "contextMenus"],
   "host_permissions": ["<all_urls>"],
   "background": {
@@ -11,9 +11,9 @@
   "options_page": "management/management.html",
   "action": {
     "default_popup": "popup/popup.html",
-    "default_icon": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" }
+    "default_icon": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png" }
   },
-  "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" },
+  "icons": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png" },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
@@ -29,6 +29,5 @@
       "js": ["shared/constants.js", "shared/detect.js", "shared/address.js", "shared/storage.js", "content.js"],
       "css": ["content.css"]
     }
-  ],
-  "web_accessible_resources": []
+  ]
 }

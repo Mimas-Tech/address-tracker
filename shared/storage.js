@@ -12,7 +12,7 @@
 globalThis.AT = globalThis.AT || {};
 
 AT.storage = (() => {
-  const KEYS = ['schemaVersion', 'addresses', 'moves', 'pages', 'settings'];
+  const KEYS = ['schemaVersion', 'addresses', 'moves', 'pages', 'settings', 'ignoreRules'];
   const SCHEMA_VERSION = 1;
 
   const uid = () => crypto.randomUUID();
@@ -34,6 +34,7 @@ AT.storage = (() => {
       moves: [],
       pages: {},
       settings: defaultSettings(),
+      ignoreRules: [],
     };
   }
 
@@ -57,6 +58,7 @@ AT.storage = (() => {
       moves: state.moves,
       pages: state.pages,
       settings: state.settings,
+      ignoreRules: state.ignoreRules,
     });
   }
 
@@ -72,6 +74,7 @@ AT.storage = (() => {
       moves: JSON.stringify(state.moves),
       pages: JSON.stringify(state.pages),
       settings: JSON.stringify(state.settings),
+      ignoreRules: JSON.stringify(state.ignoreRules),
     };
     const result = fn(state);
     const out = {};
@@ -79,6 +82,7 @@ AT.storage = (() => {
     if (JSON.stringify(state.moves) !== before.moves) out.moves = state.moves;
     if (JSON.stringify(state.pages) !== before.pages) out.pages = state.pages;
     if (JSON.stringify(state.settings) !== before.settings) out.settings = state.settings;
+    if (JSON.stringify(state.ignoreRules) !== before.ignoreRules) out.ignoreRules = state.ignoreRules;
     if (Object.keys(out).length) {
       out.schemaVersion = state.schemaVersion ?? SCHEMA_VERSION;
       await chrome.storage.local.set(out);
@@ -88,30 +92,67 @@ AT.storage = (() => {
 
   // ---- URL normalization (the pages key) -----------------------------------
 
-  // Params that change per visit/session but not the page identity.
-  const VOLATILE_PARAM = [
-    /^utm_/, /^fbclid$/, /^gclid$/, /^gbraid$/, /^wbraid$/, /^msclkid$/,
-    /^mc_eid$/, /^_ga$/, /sessionid/i, /^phpsessid$/i,
-  ];
-
+  // The page's identity is host + path only. All query params and the fragment
+  // are dropped — params are overwhelmingly session/tracking noise that would
+  // spawn duplicate entries for the same page.
   function normalizeUrl(raw) {
     try {
       const u = new URL(raw);
       const host = u.hostname.toLowerCase().replace(/^www\./, '');
-      const params = new URLSearchParams(u.search);
-      for (const key of [...params.keys()]) {
-        if (VOLATILE_PARAM.some((re) => re.test(key))) params.delete(key);
-      }
-      params.sort();
-      const query = params.toString();
       const path = u.pathname.replace(/\/+$/, '') || '/';
-      return host + path + (query ? '?' + query : ''); // fragment dropped
+      return host + path;
     } catch {
       return String(raw || '');
     }
   }
 
   const domainOf = (key) => key.split('/')[0];
+
+  // ---- ignore rules ----------------------------------------------------------
+  // A rule is a prefix on the normalized URL key: "google.com" (whole domain) or
+  // "google.com/maps" (everything starting with). Matching pages are never
+  // tracked; rules are managed in Settings and only removed by the user.
+
+  // User input -> rule form: no scheme, no www, no trailing slash, lowercase.
+  function normalizeRule(text) {
+    return String(text || '')
+      .trim()
+      .toLowerCase()
+      .replace(/^[a-z]+:\/\//, '')
+      .replace(/^www\./, '')
+      .replace(/\/+$/, '');
+  }
+
+  // A bare domain rule must not swallow "google.com.au"; a rule with a path is
+  // a plain prefix ("google.com/map" covers /maps, /map-tools, …).
+  function ruleMatches(rule, key) {
+    const k = key.toLowerCase();
+    if (rule.includes('/')) return k.startsWith(rule);
+    return k === rule || k.startsWith(rule + '/');
+  }
+
+  const isRuleIgnored = (state, key) =>
+    (state.ignoreRules || []).some((r) => ruleMatches(r, key));
+
+  // Optionally also flags already-saved matching entries as ignored, so the
+  // list cleans up in the same action. Removing the rule later does NOT
+  // un-flag them — pages are restored individually from Settings.
+  function addIgnoreRule(state, text, applyToExisting) {
+    const rule = normalizeRule(text);
+    if (!rule) return null;
+    state.ignoreRules = state.ignoreRules || [];
+    if (!state.ignoreRules.includes(rule)) state.ignoreRules.push(rule);
+    if (applyToExisting) {
+      for (const [key, page] of Object.entries(state.pages)) {
+        if (page.kind === 'web' && ruleMatches(rule, key)) page.ignored = true;
+      }
+    }
+    return rule;
+  }
+
+  function removeIgnoreRule(state, rule) {
+    state.ignoreRules = (state.ignoreRules || []).filter((r) => r !== rule);
+  }
 
   // ---- selectors -----------------------------------------------------------
 
@@ -302,6 +343,7 @@ AT.storage = (() => {
   // Creates a page only when something matched; ignored pages are left alone.
   function recordScan(state, { url, rawUrl, title }, matchedIds, now) {
     const key = normalizeUrl(url);
+    if (isRuleIgnored(state, key)) return null; // rule-ignored: never tracked
     const existing = state.pages[key];
 
     if (existing) {
@@ -386,6 +428,7 @@ AT.storage = (() => {
     KEYS, SCHEMA_VERSION, defaultState, defaultSettings,
     load, save, update,
     normalizeUrl, domainOf,
+    normalizeRule, ruleMatches, isRuleIgnored, addIgnoreRule, removeIgnoreRule,
     activeMove, currentAddress, addressById, inScope, deriveStatus, progress,
     setInitialAddress, editAddress, deleteAddress, addVariant, deleteVariant,
     startMove, completeMove, cancelMove,
