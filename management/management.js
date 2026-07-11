@@ -521,13 +521,13 @@
 
         <section class="help-section" id="help-setup">
           <h2>Getting started</h2>
-          <p>Before the extension can detect anything, it needs to know your address. Open the <strong>Addresses</strong> tab and add your current address. That is the only setup required.</p>
+          <p>Before the extension can detect anything, it needs to know your address. The setup page opens automatically when you install the extension; if you skipped it, the Dashboard shows a <strong>Run setup</strong> button. That is the only setup required.</p>
           <p>Once set, the extension scans every page you visit in the background. When it finds your address on a new site, a small prompt in the top-right corner of the page asks whether to save the site or exclude it. Prefer silence? Turn off "Ask before saving" in Settings and sites are recorded automatically.</p>
           <h3>First time checklist</h3>
           <ol>
-            <li>Add your current address in the Addresses tab.</li>
-            <li>Browse normally — visit your bank, utilities, insurance, subscriptions.</li>
-            <li>Check the Sites tab after a few days to see what has been detected.</li>
+            <li>Enter your current address during setup.</li>
+            <li>Browse normally — visit your bank, utilities, insurance, subscriptions — and click <strong>Save site</strong> when the prompt appears.</li>
+            <li>Check the Sites tab after a few days to see what you have saved.</li>
             <li>When you move, click <strong>Start move</strong> on the Dashboard.</li>
           </ol>
         </section>
@@ -535,6 +535,7 @@
         <section class="help-section" id="help-detection">
           <h2>How detection works</h2>
           <p>On each page you visit, the extension scans visible text and pre-filled form fields. It normalises the text and looks for your address using common abbreviations — Street matches St, South Australia matches SA, and so on.</p>
+          <p>On a match, what happens depends on the page: a site you already track is updated silently; a new site shows the save prompt (unless you have turned confirmation off); an excluded page is skipped entirely.</p>
           <p>Detection happens entirely on your device. The extension never sends page content anywhere.</p>
           <h3>When a site is not detected</h3>
           <p>Some sites display addresses in unusual formats — truncated, reordered, or with extra text. If a site has your address but it is not being detected, the fix is to add a variant. You can also right-click any address text on a page and use the Address Tracker context menu to add the site manually.</p>
@@ -556,7 +557,7 @@
           <h3>Working through the checklist</h3>
           <p>The Dashboard shows Needs Update and Done columns. Visit each site, update your address, then mark it done — from the Dashboard, the Sites table, or the on-page banner.</p>
           <h3>The on-page banner</h3>
-          <p>When you visit a site that still has your old address, a small banner appears in the top-right corner. It shows your new address to copy, and lets you mark the site done or dismiss the banner for that session. Can be turned off in Settings.</p>
+          <p>When you visit a site that still has your old address, a small banner appears in the top-right corner. It shows your new address to copy, and lets you mark the site done, exclude the page with <strong>Not mine</strong> (for false matches — a neighbour's listing, a store locator), or dismiss it for the session. Can be turned off in Settings.</p>
           <h3>Completing the move</h3>
           <p>Once all sites are marked done, click <strong>Complete move</strong>. Your new address becomes current, the old one is archived, and the checklist clears. To stop mid-move, click <strong>Cancel move</strong> — the new address is discarded.</p>
           <h3>Off-web tasks</h3>
@@ -595,7 +596,7 @@
             <dt>Show on-page banner during a move</dt><dd>Shows the update banner when your old address is found. Disable if disruptive.</dd>
           </dl>
           <h3>Excludes</h3>
-          <p>One table of everything the extension skips. <strong>Domain</strong> (<code>google.com</code>) and <strong>Prefix</strong> (<code>google.com/maps</code>) rules stop matching pages from ever being tracked or bannered. A <strong>Page</strong> exclude is a single page you've hidden — Restore brings it back with its history, Remove deletes it. Excludes are created from the Ignore action on the Sites tab or added directly in Settings.</p>
+          <p>One table of everything the extension skips. <strong>Domain</strong> (<code>google.com</code>) and <strong>Prefix</strong> (<code>google.com/maps</code>) rules stop matching pages from ever being tracked or bannered. A <strong>Page</strong> exclude is a single page you've hidden — Restore brings it back with its history, Remove deletes it. Excludes are created from the Ignore action on the Sites tab, the on-page prompt, or added directly in Settings. To clear several at once, tick their checkboxes and use <strong>Delete All Selected</strong>.</p>
           <h3>Backup and transfer</h3>
           <p><strong>Export</strong> saves your addresses, sites list, and move history as a JSON file. Use this to back up your data or move it to another device.</p>
           <p><strong>Import</strong> loads a previously exported file. You can merge it with existing data or replace everything. The file contains your home address — keep it private.</p>

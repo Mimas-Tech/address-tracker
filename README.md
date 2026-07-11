@@ -32,9 +32,6 @@ Store listing copy and permission justifications live in
       marquee **1400×560**; save alongside as `docs/screenshots/promo-440x280.png`
       etc. The 128×128 store icon needs no upload — it ships in the package.
 
-Icon source: `icons/high.png` (1800×1800). Regenerate the shipped sizes with
-`cd icons && for s in 16 32 48 128; do sips -z $s $s high.png --out $s.png; done`.
-
 ## Contact
 
 - Rajan Paneru — paneru.rajan@gmail.com
