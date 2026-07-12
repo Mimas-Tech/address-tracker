@@ -3,9 +3,7 @@
 A Chrome extension that keeps a private, on-device list of every website showing your home address — so when you move,
 the update checklist already exists.
 
-[**Install from the Chrome Web Store**](https://chromewebstore.google.com/detail/nehmelfpnlhkchahkbaidekanjbpnhfe) · [*
-*Watch the demo**](https://www.youtube.com/watch?v=pFAJYbqWhx0) · [**Report an issue
-**](https://github.com/Mimas-Tech/address-tracker/issues)
+[**Install from the Chrome Web Store**](https://chromewebstore.google.com/detail/fffekdlpbgbmpnplfibmkigfeaonjhpp) · [**Watch the demo**](https://www.youtube.com/watch?v=pFAJYbqWhx0) · [**Report an issue**](https://github.com/Mimas-Tech/address-tracker/issues)
 
 [![Address Tracker demo video](https://img.youtube.com/vi/pFAJYbqWhx0/hqdefault.jpg)](https://www.youtube.com/watch?v=pFAJYbqWhx0)
 
@@ -51,8 +49,7 @@ policy: [docs/privacy-policy.md](docs/privacy-policy.md).
 
 ## Install
 
-**From the Chrome Web Store:
-** [chromewebstore.google.com/detail/nehmelfpnlhkchahkbaidekanjbpnhfe](https://chromewebstore.google.com/detail/nehmelfpnlhkchahkbaidekanjbpnhfe)
+**From the Chrome Web Store:** [chromewebstore.google.com/detail/fffekdlpbgbmpnplfibmkigfeaonjhpp](https://chromewebstore.google.com/detail/fffekdlpbgbmpnplfibmkigfeaonjhpp)
 
 **From source:** clone this repository, open `chrome://extensions`, enable Developer mode, click *Load unpacked*, and
 select the repository folder.
