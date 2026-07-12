@@ -6,6 +6,9 @@
 - **Category:** Productivity → Tools
 - **Language:** English (Australia)
 - **Support email:** paneru.rajan@gmail.com (second contact: Edwin Jose George, edwinjosegeorge@gmail.com)
+- **Homepage URL:** https://github.com/Mimas-Tech/address-tracker
+- **Support URL:** https://github.com/Mimas-Tech/address-tracker/issues
+- **YouTube video URL:** https://www.youtube.com/watch?v=pFAJYbqWhx0
 - **Summary**: Tracks every site that shows your address, so moving day comes with a ready checklist. All data stays on your device.
 
 ## Product details
@@ -15,7 +18,7 @@
 > Address Tracker builds the list before you need it. Enter your address once, then browse normally. When a page you visit shows your address, that site is added to a private list on your device. By the time you move, the checklist already exists.
 >
 > How it works:
-> - Enter your current address
+> - Enter your current address (Australian address formats — states, postcodes and street abbreviations — are what the matcher understands in v1)
 > - Browse as usual. When a new site shows your address, a small prompt on the page asks whether to save it — or exclude that page, the whole domain, or a URL prefix. Prefer silence? Turn the prompt off in Settings and sites are recorded automatically.
 > - When you move, enter the new address. Every recorded site becomes an item on your checklist.
 > - Work through the list. While a page still shows the old address, a small banner reminds you and gives you the new address to copy. When the new address appears on the page, the item is marked done.
@@ -47,6 +50,7 @@
 ### What user data do you plan to collect from users now or in the future? (See FAQ for more information)
 
 - [x] Personally identifiable information
+- [x] Web history
 - [x] Website content
 
 ### I certify that the following disclosures are true:
