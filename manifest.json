@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Address Tracker",
   "version": "1.0.0",
-  "description": "Quietly tracks every site that shows your address, so moving day comes with a ready checklist. All data stays on your device.",
+  "description": "Tracks every site that shows your address, so moving day comes with a ready checklist. All data stays on your device.",
   "permissions": ["storage", "contextMenus"],
   "host_permissions": ["<all_urls>"],
   "background": {
