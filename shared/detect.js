@@ -1,5 +1,6 @@
 // Local AU address matching: profiles (from address.js) vs a page context of
-// visible text + form-field values. The street name is the required anchor.
+// visible text + form-field values. The street name — and the street number,
+// when the address has one — is the required anchor.
 globalThis.AT = globalThis.AT || {};
 
 AT.detect = (() => {
@@ -17,6 +18,26 @@ AT.detect = (() => {
   function containsPhrase(haystack, phrase) {
     if (!phrase) return false;
     return (' ' + haystack + ' ').includes(' ' + phrase + ' ');
+  }
+
+  // containsPhrase, minus occurrences claimed by a different unit: with unit 1,
+  // "2 108 north tce" ("Unit 2" / "2/108") is someone else's address, while
+  // "1 108 north tce" and a bare "108 north tce" still count.
+  function containsOwnPhrase(haystack, phrase, unit) {
+    if (!phrase) return false;
+    if (!unit) return containsPhrase(haystack, phrase);
+    const toks = haystack.split(' ');
+    const want = phrase.split(' ');
+    outer:
+    for (let i = 0; i + want.length <= toks.length; i++) {
+      for (let j = 0; j < want.length; j++) {
+        if (toks[i + j] !== want[j]) continue outer;
+      }
+      const prev = i > 0 ? toks[i - 1] : '';
+      if (prev && /^\d+[a-z]?$/.test(prev) && prev !== unit) continue;
+      return true;
+    }
+    return false;
   }
 
   // A lone 4-digit number proves nothing: the postcode only counts when it
@@ -38,16 +59,20 @@ AT.detect = (() => {
     const inText = (p) => containsPhrase(ctx.text, p);
     const inField = (p) => ctx.fields.some((f) => containsPhrase(f, p));
     const anywhere = (p) => inText(p) || inField(p);
+    // For phrases that begin with the street number, apply the unit guard.
+    const anywhereOwn = (p) => containsOwnPhrase(ctx.text, p, profile.unit) ||
+      ctx.fields.some((f) => containsOwnPhrase(f, p, profile.unit));
 
     // Whole-string fast path — also how user-flagged variants with no street
     // name (e.g. a PO box) get recognized.
-    const whole = profile.wholeVariants.some(anywhere);
+    const whole = profile.wholeVariants.some((v) =>
+      profile.number && v.split(' ')[0] === profile.number ? anywhereOwn(v) : anywhere(v));
 
     const street = profile.streetCoreForms.some(anywhere);
     if (!whole && !street) return { matched: false };
 
     const number = !!profile.number &&
-      profile.streetCoreForms.some((core) => anywhere(profile.number + ' ' + core));
+      profile.streetCoreForms.some((core) => anywhereOwn(profile.number + ' ' + core));
 
     const suburb = !!profile.suburb && anywhere(profile.suburb);
     const state = profile.stateForms.some(anywhere);
@@ -60,8 +85,10 @@ AT.detect = (() => {
         postcodeHasContext(ctx.text, profile.postcode, [profile.suburb, ...profile.stateForms]);
     }
 
-    // Anchor + at least one confirming signal.
-    const matched = whole || (street && (postcode || number || suburb));
+    // The street number, when known, is required — suburb and postcode confirm
+    // locality but can't substitute for it (neighbours share both).
+    const matched = whole ||
+      (street && (postcode || suburb) && (!profile.number || number));
     return { matched, signals: { whole, street, number, postcode, suburb, state } };
   }
 
@@ -69,5 +96,5 @@ AT.detect = (() => {
     return profiles.filter((p) => matchAddress(p, ctx).matched).map((p) => p.id);
   }
 
-  return { normalize, containsPhrase, postcodeHasContext, matchAddress, scan };
+  return { normalize, containsPhrase, containsOwnPhrase, postcodeHasContext, matchAddress, scan };
 })();

@@ -38,6 +38,16 @@ AT.address = (() => {
     return toks.slice(i).join(' ');
   }
 
+  // The unit number in line2 ("Unit 3" -> "3", "Apt 12B" -> "12b"); lets the
+  // matcher reject sightings of a different unit at the same street number.
+  function unitNumber(line2) {
+    const toks = norm(line2).split(' ');
+    for (let i = toks.length - 1; i >= 0; i--) {
+      if (/^\d+[a-z]?$/.test(toks[i])) return toks[i];
+    }
+    return '';
+  }
+
   // The last numeric token before the street name ("unit 3, 12 smith st" -> "12").
   function streetNumber(street) {
     const toks = norm(street).split(' ');
@@ -94,6 +104,7 @@ AT.address = (() => {
       id: address.id,
       streetCoreForms: unique(streetForms(address.street).map(stripNumber)),
       number: streetNumber(address.street),
+      unit: unitNumber(address.line2),
       suburb: norm(address.suburb),
       stateForms: stateForms(address.state),
       postcode: norm(address.postcode),
@@ -101,5 +112,5 @@ AT.address = (() => {
     };
   }
 
-  return { format, buildProfile, generatedVariants, streetForms, stateForms, streetNumber };
+  return { format, buildProfile, generatedVariants, streetForms, stateForms, streetNumber, unitNumber };
 })();

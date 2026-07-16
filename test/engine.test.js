@@ -30,7 +30,7 @@ ok('full address in free text', detect.matchAddress(profile, ctx('Ship to 12 Smi
 ok('expanded street + full state', detect.matchAddress(profile, ctx('12 Smith Street, Adelaide South Australia 5000')).matched);
 ok('split form fields', detect.matchAddress(profile, ctx('Account details', ['12 Smith St', 'Adelaide', 'SA', '5000'])).matched);
 ok('unit change still anchors', detect.matchAddress(profile, ctx('Unit 3, 12 Smith St, Adelaide SA 5000')).matched);
-ok('street + suburb, no postcode', detect.matchAddress(profile, ctx('Smith Street Adelaide branch, 12 in stock')).matched);
+ok('street + suburb without the number -> no match', !detect.matchAddress(profile, ctx('Smith Street Adelaide branch, 12 in stock')).matched);
 
 ok('lone postcode, no street -> no match', !detect.matchAddress(profile, ctx('Win 5000 dollars today!')).matched);
 
@@ -50,6 +50,19 @@ const kProfile = address.buildProfile(KILDA);
 ok('Saint-prefixed street matches', detect.matchAddress(kProfile, ctx('10 St Kilda Road, Melbourne VIC 3004')).matched);
 ok('St Kilda core has no leading number stripped wrong', kProfile.streetCoreForms.includes('st kilda road'));
 
+// Neighbour precision: same street or same building must not match.
+const TERRACE = { id: 'a5', line2: 'Unit 1', street: '108 North Terrace', suburb: 'Adelaide', state: 'SA', postcode: '5000', flaggedVariants: [] };
+const tProfile = address.buildProfile(TERRACE);
+ok('own unit matches', detect.matchAddress(tProfile, ctx('Unit 1, 108 North Terrace, Adelaide SA 5000')).matched);
+ok('slash unit form matches', detect.matchAddress(tProfile, ctx('1/108 North Terrace, Adelaide SA 5000')).matched);
+ok('building without unit matches', detect.matchAddress(tProfile, ctx('108 North Terrace, Adelaide SA 5000')).matched);
+ok('different street number -> no match', !detect.matchAddress(tProfile, ctx('Unit 2, 109 North Terrace, Adelaide SA 5000')).matched);
+ok('same number, different unit -> no match', !detect.matchAddress(tProfile, ctx('Unit 2, 108 North Terrace, Adelaide SA 5000')).matched);
+ok('slash form, different unit -> no match', !detect.matchAddress(tProfile, ctx('2/108 North Terrace, Adelaide SA 5000')).matched);
+ok('street + suburb, no number -> no match', !detect.matchAddress(tProfile, ctx('North Terrace, Adelaide SA 5000')).matched);
+ok('own unit in form fields matches', detect.matchAddress(tProfile, ctx('Checkout', ['1/108 North Terrace', 'Adelaide', 'SA', '5000'])).matched);
+ok('other unit in form fields -> no match', !detect.matchAddress(tProfile, ctx('Checkout', ['2/108 North Terrace', 'Adelaide', 'SA', '5000'])).matched);
+
 // Flagged variant (e.g. a PO box) with no street name.
 const PO = { id: 'a3', street: '5 King St', suburb: 'Perth', state: 'WA', postcode: '6000', flaggedVariants: ['PO Box 99, Perth WA 6000'] };
 const poProfile = address.buildProfile(PO);
@@ -58,6 +71,8 @@ ok('flagged variant matches verbatim', detect.matchAddress(poProfile, ctx('Mail 
 console.log('\nProfile generation');
 ok('state expands to both forms', address.stateForms('SA').includes('south australia') && address.stateForms('SA').includes('sa'));
 ok('street number extracted', profile.number === '12');
+ok('unit extracted from line2', address.buildProfile(SMITH_UNIT).unit === '3');
+ok('no line2 -> no unit', profile.unit === '');
 ok('street core has both type forms', profile.streetCoreForms.includes('smith st') && profile.streetCoreForms.includes('smith street'));
 
 console.log('\nURL normalization');
