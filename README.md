@@ -73,3 +73,9 @@ the [issue tracker](https://github.com/Mimas-Tech/address-tracker/issues).
 
 - Rajan Paneru — [paneru.rajan@gmail.com](mailto:paneru.rajan@gmail.com)
 - Edwin Jose George — [edwinjosegeorge@gmail.com](mailto:edwinjosegeorge@gmail.com)
+
+## License
+
+Copyright (C) 2026 Rajan Paneru and Edwin Jose George.
+
+Address Tracker is free software, licensed under the [GNU General Public License v3.0 or later](LICENSE). You may use, study, share and modify it; if you distribute a modified version, you must release your changes under the same license, keeping the source open and free. It comes with no warranty.
