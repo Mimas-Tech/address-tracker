@@ -12,6 +12,7 @@
 
   let settings = AT.storage.defaultSettings();
   let profiles = [];            // address profiles we're hunting right now
+  let addressLabels = {};       // address id -> formatted string, for the toast
   let ignoreRules = [];         // normalized-URL prefixes we never scan
   let move = null;              // { fromId, toId, newAddressText } while moving
   let bannerDismissed = false;  // reset on navigation
@@ -23,6 +24,7 @@
     const state = await AT.storage.load();
     settings = state.settings;
     ignoreRules = state.ignoreRules || [];
+    addressLabels = Object.fromEntries(state.addresses.map((a) => [a.id, AT.address.format(a)]));
     const active = AT.storage.activeMove(state);
     if (active) {
       const to = AT.storage.addressById(state, active.toAddressId);
@@ -187,6 +189,8 @@
              padding: 12px 14px 14px; animation: at-in .25s ease; }
       @keyframes at-in { from { opacity: 0; transform: translateY(-10px); }
                          to   { opacity: 1; transform: none; } }
+      @keyframes at-out { to { opacity: 0; transform: translateY(-10px); } }
+      .bar.out { animation: at-out .15s ease forwards; }
       .head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
       .head img { width: 20px; height: 20px; flex: none; }
       .name { font-weight: 600; font-size: 13px; flex: 1; letter-spacing: .01em; }
@@ -200,6 +204,10 @@
       .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
       .divider { height: 1px; background: #36343B; margin: 12px -14px; }
       .lbl { color: #938F99; font-size: 12px; }
+      .ok { color: #A5D6A7; margin-bottom: 0; }
+      button.link { background: transparent; color: #938F99; font-size: 12px;
+                    padding: 5px 6px; margin-left: auto; }
+      button.link:hover { color: #E6E1E5; }
       button { font: inherit; border: 0; border-radius: 3px; padding: 5px 10px;
                cursor: pointer; background: #2B2930; color: #E6E1E5; }
       button.primary { background: #D0BCFF; color: #381E72; font-weight: 600; }
@@ -230,6 +238,9 @@
 
     const key = AT.storage.normalizeUrl(location.href);
     const domain = AT.storage.domainOf(key);
+    const label = addressLabels[matchedIds[0]] || '';
+    // During a move only the new address can reach here — the old one is auto-recorded.
+    const kind = move && matchedIds.includes(move.toId) ? 'new address' : 'address';
 
     const host = document.createElement('div');
     host.id = TOAST_HOST_ID;
@@ -238,41 +249,48 @@
       <style>${cardStyles()}</style>
       <div class="bar">
         ${cardHead()}
-        <div class="msg">Your address was found on <b>${escapeHtml(domain)}</b>.
-          Save this site to your update list?</div>
+        <div class="msg">Found your ${kind} on <b>${escapeHtml(domain)}</b>${label ? ':' : '.'}</div>
+        ${label ? `<div class="addr">${escapeHtml(label)}</div>` : ''}
         <div class="row">
           <button class="primary" data-act="save">Save site</button>
-          <button data-act="dismiss">Not now</button>
+          <button class="ghost" data-act="dismiss">Not now</button>
+          <button class="link" data-act="more">Ignore instead…</button>
         </div>
-        <div class="divider"></div>
-        <div class="row">
-          <span class="lbl">Ignore:</span>
-          <button class="ghost" data-act="ig-page">This page</button>
-          <button class="ghost" data-act="ig-domain" title="${escapeHtml(domain)}">${escapeHtml(domain)}</button>
-          <button class="ghost" data-act="ig-prefix">Prefix…</button>
-        </div>
-        <div class="row" data-prefix-row hidden style="margin-top:8px">
-          <input type="text" value="${escapeHtml(key)}" spellcheck="false">
-          <button data-act="ig-prefix-ok">Ignore</button>
+        <div data-ignore-row hidden>
+          <div class="divider"></div>
+          <div class="row">
+            <span class="lbl">Ignore:</span>
+            <button class="ghost" data-act="ig-page">This page</button>
+            <button class="ghost" data-act="ig-domain" title="${escapeHtml(domain)}">${escapeHtml(domain)}</button>
+            <button class="ghost" data-act="ig-prefix">Prefix…</button>
+          </div>
+          <div class="row" data-prefix-row hidden style="margin-top:8px">
+            <input type="text" value="${escapeHtml(key)}" spellcheck="false">
+            <button data-act="ig-prefix-ok">Ignore</button>
+          </div>
         </div>
       </div>`;
 
     root.querySelector('[data-act="save"]').addEventListener('click', () => {
       send('save-page', { title: document.title, matchedIds });
-      removeToast();
+      toastConfirm(root, 'Saved to your list');
     });
     root.querySelectorAll('[data-act="dismiss"]').forEach((b) => b.addEventListener('click', () => {
       toastDismissed = true; // this session only; asks again next visit
-      removeToast();
+      hideToast();
     }));
+    root.querySelector('[data-act="more"]').addEventListener('click', (e) => {
+      e.target.hidden = true;
+      root.querySelector('[data-ignore-row]').hidden = false;
+    });
     root.querySelector('[data-act="ig-page"]').addEventListener('click', () => {
       send('ignore', { title: document.title });
       toastDismissed = true;
-      removeToast();
+      toastConfirm(root, 'This page will be ignored');
     });
     root.querySelector('[data-act="ig-domain"]').addEventListener('click', () => {
       send('ignore-rule', { rule: domain });
-      removeToast();
+      toastConfirm(root, `${domain} will be ignored`);
     });
     root.querySelector('[data-act="ig-prefix"]').addEventListener('click', () => {
       const row = root.querySelector('[data-prefix-row]');
@@ -283,13 +301,46 @@
       const rule = root.querySelector('[data-prefix-row] input').value.trim();
       if (!rule) return;
       send('ignore-rule', { rule });
-      removeToast();
+      toastConfirm(root, 'Prefix rule added');
     });
 
+    document.addEventListener('keydown', onToastEscape);
     document.body.appendChild(host);
   }
 
+  // Swap the toast body for a short "done" note, then fade out.
+  function toastConfirm(root, text) {
+    const bar = root.querySelector('.bar');
+    if (!bar) return;
+    bar.innerHTML = `
+      <div class="head">
+        <img src="${chrome.runtime.getURL('icons/48.png')}" alt="">
+        <span class="name">Address Tracker</span>
+      </div>
+      <div class="msg ok">✓ ${escapeHtml(text)}</div>`;
+    setTimeout(hideToast, 1400);
+  }
+
+  function onToastEscape(e) {
+    if (e.key !== 'Escape') return;
+    toastDismissed = true;
+    hideToast();
+  }
+
+  // Animated close for user-driven dismissals.
+  function hideToast() {
+    const host = document.getElementById(TOAST_HOST_ID);
+    document.removeEventListener('keydown', onToastEscape);
+    if (!host) return;
+    const bar = host.shadowRoot && host.shadowRoot.querySelector('.bar');
+    if (!bar) { host.remove(); return; }
+    bar.classList.add('out');
+    setTimeout(() => host.remove(), 160);
+  }
+
+  // Instant close for navigation.
   function removeToast() {
+    document.removeEventListener('keydown', onToastEscape);
     document.getElementById(TOAST_HOST_ID)?.remove();
   }
 
